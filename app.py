@@ -12,7 +12,7 @@ DB_PATH = "cartera_prestamos.db"
 
 # -- DB helpers --
 def get_conn():
-    conn = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
+    conn = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -109,10 +109,10 @@ def calcular_cronograma(monto, tasa_anual, plazo_meses, frecuencia, fecha_desemb
         cronograma.append({
             "Periodo": i,
             "Fecha": fecha_pago,
-            "Cuota": round(cuota, 2),
-            "Interes": round(interes, 2),
-            "Amortizacion": round(amortizacion, 2),
-            "Saldo": round(saldo, 2)
+            "Cuota": round(cuota,2),
+            "Interes": round(interes,2),
+            "Amortizacion": round(amortizacion,2),
+            "Saldo": round(saldo,2)
         })
     return pd.DataFrame(cronograma)
 
@@ -138,20 +138,17 @@ def exportar_pdf(df, cliente, prestamo_id):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     styles = getSampleStyleSheet()
-    flowables = [
-        Paragraph(f"Cronograma de Pago - Préstamo #{prestamo_id}", styles['Title']),
-        Paragraph(f"Cliente: {cliente}", styles['Normal']),
-        Spacer(1, 12)
-    ]
+    flowables = [Paragraph(f"Cronograma de Pago - Préstamo #{prestamo_id}", styles['Title']),
+                 Paragraph(f"Cliente: {cliente}", styles['Normal']),
+                 Spacer(1,12)]
     data = [df.columns.to_list()]
     for _, row in df.iterrows():
         data.append([str(row[col]) if not pd.isna(row[col]) else '' for col in df.columns])
     table = Table(data, repeatRows=1)
     table.setStyle(TableStyle([
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER')
+        ('GRID',(0,0),(-1,-1),0.5,colors.grey),
+        ('BACKGROUND',(0,0),(-1,0),colors.lightgrey),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
     ]))
     flowables.append(table)
     doc.build(flowables)
@@ -177,14 +174,14 @@ if menu == "Clientes":
     with col1:
         with st.form("form_cliente"):
             nombre = st.text_input("Nombre completo", placeholder="Ej: Juan Pérez")
-            submitted = st.form_submit_button("➕ Agregar Cliente")
-            if submitted:
-                if nombre.strip() == "":
-                    st.error("Debe ingresar un nombre")
-                else:
-                    agregar_cliente(nombre.strip())
-                    st.success(f"Cliente '{nombre.strip()}' agregado.")
-                    st.experimental_rerun()
+            submitted_cliente = st.form_submit_button("➕ Agregar Cliente")
+        if submitted_cliente:
+            if nombre.strip() == "":
+                st.error("Debe ingresar un nombre")
+            else:
+                agregar_cliente(nombre.strip())
+                st.success(f"Cliente '{nombre.strip()}' agregado.")
+                st.experimental_rerun()
     with col2:
         st.markdown("### 📋 Clientes registrados")
         df_clientes = obtener_clientes()
@@ -204,14 +201,14 @@ elif menu == "Préstamos":
                 monto = st.number_input("Monto", min_value=0.0, value=1000.0, step=100.0, format="%.2f")
                 tasa = st.number_input("Tasa anual (%)", min_value=0.0, value=12.0, step=0.1, format="%.2f")
                 plazo = st.number_input("Plazo (meses)", min_value=1, value=12)
-                frecuencia = st.selectbox("Frecuencia de pagos por año", [12, 4, 2, 1], index=0)
+                frecuencia = st.selectbox("Frecuencia de pagos por año", [12,4,2,1], index=0)
                 fecha_desembolso = st.date_input("Fecha de desembolso", value=date.today())
-                submitted = st.form_submit_button("🏦 Crear préstamo")
-                if submitted:
-                    cliente_id = int(df_clientes[df_clientes['nombre'] == cliente_sel]['id'].values[0])
-                    agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
-                    st.success(f"Préstamo creado para {cliente_sel}.")
-                    st.experimental_rerun()
+                submitted_prestamo = st.form_submit_button("🏦 Crear préstamo")
+            if submitted_prestamo:
+                cliente_id = int(df_clientes[df_clientes['nombre']==cliente_sel]['id'].values[0])
+                agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
+                st.success(f"Préstamo creado para {cliente_sel}.")
+                st.experimental_rerun()
         with col2:
             st.markdown("### 📋 Préstamos existentes")
             df_prestamos = obtener_prestamos()
@@ -240,55 +237,16 @@ elif menu == "Pagos":
             with st.form("form_pago"):
                 fecha_pago = st.date_input("Fecha pago", value=date.today())
                 monto_pago = st.number_input("Monto pago", min_value=0.0, value=0.0, step=10.0, format="%.2f")
-                submitted = st.form_submit_button("💾 Registrar pago")
-                if submitted:
-                    if monto_pago <= 0:
-                        st.error("Monto debe ser mayor a cero")
-                    else:
-                        agregar_pago(prestamo_id, fecha_pago, monto_pago)
-                        st.success("Pago registrado.")
-                        st.experimental_rerun()
+                submitted_pago = st.form_submit_button("💾 Registrar pago")
+            if submitted_pago:
+                if monto_pago <= 0:
+                    st.error("Monto debe ser mayor a cero")
+                else:
+                    agregar_pago(prestamo_id, fecha_pago, monto_pago)
+                    st.success("Pago registrado.")
+                    st.experimental_rerun()
         with col2:
             pagos = obtener_pagos(prestamo_id)
             st.markdown("### 🧾 Pagos registrados")
             st.dataframe(pagos.style.format({
                 "id": "{:.0f}",
-                "prestamo_id": "{:.0f}",
-                "fecha_pago": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
-                "monto": "${:,.2f}"
-            }).set_properties(**{'text-align': 'center'}))
-    st.divider()
-
-elif menu == "Reporte":
-    st.markdown("## 📊 Reporte y Cronograma")
-    df_prestamos = obtener_prestamos()
-    if df_prestamos.empty:
-        st.info("📌 No hay préstamos.")
-    else:
-        prestamo_sel = st.selectbox("Selecciona préstamo", df_prestamos['id'].astype(str) + " - " + df_prestamos['cliente'])
-        prestamo_id = int(prestamo_sel.split(" - ")[0])
-        df_prestamo = df_prestamos[df_prestamos['id'] == prestamo_id].iloc[0]
-        cronograma = calcular_cronograma(
-            df_prestamo['monto'],
-            df_prestamo['tasa'],
-            df_prestamo['plazo'],
-            df_prestamo['frecuencia'],
-            pd.to_datetime(df_prestamo['fecha_desembolso']).date()
-        )
-        pagos = obtener_pagos(prestamo_id)
-        cron_estado = estado_cuotas(cronograma, pagos)
-        st.dataframe(cron_estado.style.format({
-            "Periodo": "{:.0f}",
-            "Fecha": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
-            "Cuota": "${:,.2f}",
-            "Interes": "${:,.2f}",
-            "Amortizacion": "${:,.2f}",
-            "Saldo": "${:,.2f}",
-            "Pagado": "${:,.2f}",
-            "Pendiente": "${:,.2f}",
-            "Estado": "{}"
-        }).set_properties(**{'text-align': 'center'}))
-        st.divider()
-        if st.button("📥 Descargar cronograma PDF"):
-            pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
-            st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
