@@ -73,11 +73,24 @@ def modificar_cliente(id_cliente, nombre, identificacion, direccion, telefono):
 def eliminar_cliente(id_cliente):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("DELETE FROM pagos WHERE prestamo_id IN (SELECT id FROM prestamos WHERE cliente_id = ?)", (id_cliente,))
-    cur.execute("DELETE FROM prestamos WHERE cliente_id = ?", (id_cliente,))
-    cur.execute("DELETE FROM clientes WHERE id=?", (id_cliente,))
-    conn.commit()
-    conn.close()
+    try:
+        # Primero borrar pagos relacionados a préstamos del cliente
+        cur.execute("""
+            DELETE FROM pagos
+            WHERE prestamo_id IN (
+                SELECT id FROM prestamos WHERE cliente_id = ?
+            )
+        """, (id_cliente,))
+        # Luego borrar préstamos
+        cur.execute("DELETE FROM prestamos WHERE cliente_id = ?", (id_cliente,))
+        # Finalmente borrar cliente
+        cur.execute("DELETE FROM clientes WHERE id = ?", (id_cliente,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def obtener_clientes():
     conn = get_conn()
@@ -213,16 +226,16 @@ with st.sidebar:
     st.markdown("## 📋 Menú")
     if st.button("👥 Clientes"):
         st.session_state['menu'] = "Clientes"
-        st.rerun()
+        st.experimental_rerun()
     if st.button("🏦 Préstamos"):
         st.session_state['menu'] = "Préstamos"
-        st.rerun()
+        st.experimental_rerun()
     if st.button("💵 Pagos"):
         st.session_state['menu'] = "Pagos"
-        st.rerun()
+        st.experimental_rerun()
     if st.button("📊 Reporte"):
         st.session_state['menu'] = "Reporte"
-        st.rerun()
+        st.experimental_rerun()
 
 menu = st.session_state['menu']
 
@@ -247,7 +260,7 @@ if menu == "Clientes":
                 else:
                     agregar_cliente(nombre.strip(), identificacion.strip(), direccion.strip(), telefono.strip())
                     st.success(f"Cliente '{nombre.strip()}' agregado.")
-                    st.rerun()
+                    st.experimental_rerun()
 
         if not df_clientes.empty:
             with st.form("form_modificar_cliente"):
@@ -262,7 +275,7 @@ if menu == "Clientes":
                 if modificar_submitted:
                     modificar_cliente(cliente_mod['id'], nombre_mod.strip(), identificacion_mod.strip(), direccion_mod.strip(), telefono_mod.strip())
                     st.success(f"Cliente '{nombre_mod.strip()}' modificado.")
-                    st.rerun()
+                    st.experimental_rerun()
 
             with st.form("form_eliminar_cliente"):
                 st.markdown("### 🗑️ Eliminar Cliente")
@@ -272,7 +285,7 @@ if menu == "Clientes":
                 if eliminar_submitted:
                     eliminar_cliente(cliente_del['id'])
                     st.success(f"Cliente '{cliente_del_sel}' eliminado.")
-                    st.rerun()
+                    st.experimental_rerun()
 
     with col2:
         st.markdown("### 📋 Clientes registrados")
@@ -304,7 +317,7 @@ elif menu == "Préstamos":
                         cliente_id = int(df_clientes[df_clientes['nombre'] == cliente_sel]['id'].values[0])
                         agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
                         st.success(f"Préstamo creado para {cliente_sel}.")
-                        st.rerun()
+                        st.experimental_rerun()
 
         with col2:
             df_prestamos = obtener_prestamos()
@@ -343,7 +356,7 @@ elif menu == "Pagos":
                     else:
                         agregar_pago(prestamo_id, fecha_pago, monto_pago)
                         st.success("Pago registrado.")
-                        st.rerun()
+                        st.experimental_rerun()
 
         with col2:
             pagos = obtener_pagos(prestamo_id)
