@@ -55,7 +55,7 @@ def agregar_cliente(nombre):
 
 def obtener_clientes():
     conn = get_conn()
-    df = pd.read_sql_query("SELECT * FROM clientes", conn)
+    df = pd.read_sql_query("SELECT * FROM clientes ORDER BY id DESC", conn)
     conn.close()
     return df
 
@@ -72,6 +72,7 @@ def obtener_prestamos():
     df = pd.read_sql_query("""
     SELECT p.id, c.nombre as cliente, p.monto, p.tasa, p.plazo, p.frecuencia, p.fecha_desembolso
     FROM prestamos p JOIN clientes c ON p.cliente_id = c.id
+    ORDER BY p.id DESC
     """, conn)
     conn.close()
     return df
@@ -156,90 +157,107 @@ def exportar_pdf(df, cliente, prestamo_id):
 
 # -- Streamlit UI --
 
-st.set_page_config("Sistema Préstamos", layout="wide")
+st.set_page_config("💰 Sistema Préstamos", layout="wide", page_icon="💸")
 init_db()
 
-st.title("Sistema de Gestión de Préstamos")
+st.markdown("<h1 style='text-align:center; color: darkblue;'>💰 Sistema de Gestión de Préstamos</h1>", unsafe_allow_html=True)
+st.divider()
 
-menu = st.sidebar.selectbox("Menú", ["Clientes", "Préstamos", "Pagos", "Reporte"])
+menu = st.sidebar.selectbox("📋 Menú", ["Clientes", "Préstamos", "Pagos", "Reporte"])
 
 if 'msg' not in st.session_state:
     st.session_state['msg'] = ''
 
 if menu == "Clientes":
-    st.header("Agregar Cliente")
-    with st.form("form_cliente"):
-        nombre = st.text_input("Nombre completo")
-        if st.form_submit_button("Agregar"):
-            if nombre.strip() == "":
-                st.error("Debe ingresar un nombre")
-            else:
-                agregar_cliente(nombre.strip())
-                st.session_state['msg'] = f"Cliente '{nombre.strip()}' agregado."
-                st.experimental_rerun()
-    if st.session_state['msg']:
-        st.success(st.session_state['msg'])
-        st.session_state['msg'] = ''
-    df_clientes = obtener_clientes()
-    st.subheader("Clientes registrados")
-    st.dataframe(df_clientes)
+    st.markdown("## 👥 Clientes")
+    col1, col2 = st.columns([2, 3])
+    with col1:
+        with st.form("form_cliente"):
+            nombre = st.text_input("Nombre completo", placeholder="Ej: Juan Pérez")
+            if st.form_submit_button("➕ Agregar Cliente"):
+                if nombre.strip() == "":
+                    st.error("Debe ingresar un nombre")
+                else:
+                    agregar_cliente(nombre.strip())
+                    st.success(f"Cliente '{nombre.strip()}' agregado.")
+                    st.experimental_rerun()
+    with col2:
+        st.markdown("### 📋 Clientes registrados")
+        df_clientes = obtener_clientes()
+        st.dataframe(df_clientes.style.format({"id": "{:.0f}"}).set_properties(**{'text-align': 'center'}))
+    st.divider()
 
 elif menu == "Préstamos":
-    st.header("Agregar Préstamo")
+    st.markdown("## 🏦 Préstamos")
     df_clientes = obtener_clientes()
     if df_clientes.empty:
-        st.info("Agrega primero clientes.")
+        st.info("📌 Agrega primero clientes.")
     else:
-        with st.form("form_prestamo"):
-            cliente_sel = st.selectbox("Cliente", df_clientes['nombre'])
-            monto = st.number_input("Monto", min_value=0.0, value=1000.0, step=100.0)
-            tasa = st.number_input("Tasa anual (%)", min_value=0.0, value=12.0, step=0.1)
-            plazo = st.number_input("Plazo (meses)", min_value=1, value=12)
-            frecuencia = st.selectbox("Frecuencia de pagos por año", [12,4,2,1], index=0)
-            fecha_desembolso = st.date_input("Fecha de desembolso", value=date.today())
-            if st.form_submit_button("Crear préstamo"):
-                cliente_id = int(df_clientes[df_clientes['nombre']==cliente_sel]['id'].values[0])
-                agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
-                st.session_state['msg'] = f"Préstamo creado para {cliente_sel}."
-                st.experimental_rerun()
-    if st.session_state['msg']:
-        st.success(st.session_state['msg'])
-        st.session_state['msg'] = ''
-
-    st.markdown("---")
-    st.subheader("Préstamos existentes")
-    df_prestamos = obtener_prestamos()
-    st.dataframe(df_prestamos)
+        col1, col2 = st.columns([2, 3])
+        with col1:
+            with st.form("form_prestamo"):
+                cliente_sel = st.selectbox("Cliente", df_clientes['nombre'])
+                monto = st.number_input("Monto", min_value=0.0, value=1000.0, step=100.0, format="%.2f")
+                tasa = st.number_input("Tasa anual (%)", min_value=0.0, value=12.0, step=0.1, format="%.2f")
+                plazo = st.number_input("Plazo (meses)", min_value=1, value=12)
+                frecuencia = st.selectbox("Frecuencia de pagos por año", [12,4,2,1], index=0)
+                fecha_desembolso = st.date_input("Fecha de desembolso", value=date.today())
+                if st.form_submit_button("🏦 Crear préstamo"):
+                    cliente_id = int(df_clientes[df_clientes['nombre']==cliente_sel]['id'].values[0])
+                    agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
+                    st.success(f"Préstamo creado para {cliente_sel}.")
+                    st.experimental_rerun()
+        with col2:
+            st.markdown("### 📋 Préstamos existentes")
+            df_prestamos = obtener_prestamos()
+            st.dataframe(df_prestamos.style.format({
+                "id": "{:.0f}",
+                "monto": "${:,.2f}",
+                "tasa": "{:.2f}%",
+                "plazo": "{:.0f} meses",
+                "frecuencia": "{:.0f} pagos/año",
+                "fecha_desembolso": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y')
+            }).set_properties(**{'text-align': 'center'}))
+    st.divider()
 
 elif menu == "Pagos":
-    st.header("Registrar Pago")
+    st.markdown("## 💵 Registrar Pagos")
     df_prestamos = obtener_prestamos()
     if df_prestamos.empty:
-        st.info("No hay préstamos.")
+        st.info("📌 No hay préstamos.")
     else:
         prestamo_sel = st.selectbox("Selecciona préstamo", df_prestamos['id'].astype(str) + " - " + df_prestamos['cliente'])
         prestamo_id = int(prestamo_sel.split(" - ")[0])
         df_prestamo = df_prestamos[df_prestamos['id'] == prestamo_id].iloc[0]
-        st.write(f"Préstamo de {df_prestamo['cliente']}, monto: {df_prestamo['monto']}, tasa: {df_prestamo['tasa']}%, plazo: {df_prestamo['plazo']} meses")
-        with st.form("form_pago"):
-            fecha_pago = st.date_input("Fecha pago", value=date.today())
-            monto_pago = st.number_input("Monto pago", min_value=0.0, value=0.0, step=10.0)
-            if st.form_submit_button("Registrar pago"):
-                if monto_pago <= 0:
-                    st.error("Monto debe ser mayor a cero")
-                else:
-                    agregar_pago(prestamo_id, fecha_pago, monto_pago)
-                    st.success("Pago registrado.")
-                    st.experimental_rerun()
-        pagos = obtener_pagos(prestamo_id)
-        st.subheader("Pagos registrados")
-        st.dataframe(pagos)
+        st.markdown(f"**Préstamo de {df_prestamo['cliente']}** - Monto: ${df_prestamo['monto']:.2f} | Tasa: {df_prestamo['tasa']:.2f}% | Plazo: {df_prestamo['plazo']} meses")
+        col1, col2 = st.columns([2, 3])
+        with col1:
+            with st.form("form_pago"):
+                fecha_pago = st.date_input("Fecha pago", value=date.today())
+                monto_pago = st.number_input("Monto pago", min_value=0.0, value=0.0, step=10.0, format="%.2f")
+                if st.form_submit_button("💾 Registrar pago"):
+                    if monto_pago <= 0:
+                        st.error("Monto debe ser mayor a cero")
+                    else:
+                        agregar_pago(prestamo_id, fecha_pago, monto_pago)
+                        st.success("Pago registrado.")
+                        st.experimental_rerun()
+        with col2:
+            pagos = obtener_pagos(prestamo_id)
+            st.markdown("### 🧾 Pagos registrados")
+            st.dataframe(pagos.style.format({
+                "id": "{:.0f}",
+                "prestamo_id": "{:.0f}",
+                "fecha_pago": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
+                "monto": "${:,.2f}"
+            }).set_properties(**{'text-align': 'center'}))
+    st.divider()
 
 elif menu == "Reporte":
-    st.header("Reporte y Cronograma")
+    st.markdown("## 📊 Reporte y Cronograma")
     df_prestamos = obtener_prestamos()
     if df_prestamos.empty:
-        st.info("No hay préstamos.")
+        st.info("📌 No hay préstamos.")
     else:
         prestamo_sel = st.selectbox("Selecciona préstamo", df_prestamos['id'].astype(str) + " - " + df_prestamos['cliente'])
         prestamo_id = int(prestamo_sel.split(" - ")[0])
@@ -253,12 +271,19 @@ elif menu == "Reporte":
         )
         pagos = obtener_pagos(prestamo_id)
         cron_estado = estado_cuotas(cronograma, pagos)
-        st.dataframe(cron_estado)
-        if st.button("Generar cronograma PDF"):
+        st.dataframe(cron_estado.style.format({
+            "Periodo": "{:.0f}",
+            "Fecha": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
+            "Cuota": "${:,.2f}",
+            "Interes": "${:,.2f}",
+            "Amortizacion": "${:,.2f}",
+            "Saldo": "${:,.2f}",
+            "Pagado": "${:,.2f}",
+            "Pendiente": "${:,.2f}",
+            "Estado": "{}"
+        }).set_properties(**{'text-align': 'center'}))
+        st.divider()
+        if st.button("📥 Descargar cronograma PDF"):
             pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
-            st.download_button(
-                label="Descargar PDF",
-                data=pdf_bytes.getvalue(),
-                file_name=f"Cronograma_{prestamo_id}.pdf",
-                mime="application/pdf"
-            )
+            st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
+
