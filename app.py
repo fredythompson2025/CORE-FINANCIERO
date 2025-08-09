@@ -73,11 +73,8 @@ def modificar_cliente(id_cliente, nombre, identificacion, direccion, telefono):
 def eliminar_cliente(id_cliente):
     conn = get_conn()
     cur = conn.cursor()
-    # Borrar pagos relacionados
     cur.execute("DELETE FROM pagos WHERE prestamo_id IN (SELECT id FROM prestamos WHERE cliente_id = ?)", (id_cliente,))
-    # Borrar préstamos relacionados
     cur.execute("DELETE FROM prestamos WHERE cliente_id = ?", (id_cliente,))
-    # Borrar cliente
     cur.execute("DELETE FROM clientes WHERE id=?", (id_cliente,))
     conn.commit()
     conn.close()
@@ -235,10 +232,8 @@ menu = st.session_state['menu']
 if menu == "Clientes":
     st.markdown("## 👥 Clientes")
 
-    # Carga clientes
     df_clientes = obtener_clientes()
 
-    # Submenú para Clientes
     opciones = ["Agregar", "Modificar", "Eliminar", "Buscar"]
     sub_menu = st.radio("Selecciona acción:", opciones, index=opciones.index(st.session_state['sub_menu_clientes']))
     st.session_state['sub_menu_clientes'] = sub_menu
@@ -408,4 +403,5 @@ elif menu == "Reporte":
 
         st.divider()
         if st.button("📥 Descargar cronograma PDF"):
-            pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'],
+            pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
+            st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
