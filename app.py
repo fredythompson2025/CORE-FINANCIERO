@@ -385,8 +385,28 @@ elif menu == "Reporte":
         prestamo_sel = st.selectbox("Selecciona préstamo", df_prestamos['id'].astype(str) + " - " + df_prestamos['cliente'])
         prestamo_id = int(prestamo_sel.split(" - ")[0])
         df_prestamo = df_prestamos[df_prestamos['id'] == prestamo_id].iloc[0]
-        cronograma = calcular_cronograma
+        cronograma = calcular_cronograma(
             df_prestamo['monto'],
             df_prestamo['tasa'],
             df_prestamo['plazo'],
             df_prestamo['frecuencia'],
+            pd.to_datetime(df_prestamo['fecha_desembolso']).date()
+        )
+        pagos = obtener_pagos(prestamo_id)
+        cron_estado = estado_cuotas(cronograma, pagos)
+
+        st.dataframe(cron_estado.style.format({
+            "Periodo": "{:.0f}",
+            "Fecha": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
+            "Cuota": "${:,.2f}",
+            "Interes": "${:,.2f}",
+            "Amortizacion": "${:,.2f}",
+            "Saldo": "${:,.2f}",
+            "Pagado": "${:,.2f}",
+            "Pendiente": "${:,.2f}"
+        }).set_properties(**{'text-align': 'center'}))
+
+        st.divider()
+        if st.button("📥 Descargar cronograma PDF"):
+            pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
+            st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
