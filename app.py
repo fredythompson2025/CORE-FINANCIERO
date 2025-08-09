@@ -19,7 +19,7 @@ def get_conn():
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
-    # Tabla clientes con campos nuevos
+    # Tabla clientes con nuevos campos
     cur.execute("""
     CREATE TABLE IF NOT EXISTS clientes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +28,6 @@ def init_db():
         direccion TEXT,
         telefono TEXT
     )""")
-    # Tabla avales relacionada a cliente
     cur.execute("""
     CREATE TABLE IF NOT EXISTS avales (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +38,6 @@ def init_db():
         telefono TEXT,
         FOREIGN KEY(cliente_id) REFERENCES clientes(id)
     )""")
-    # Resto de tablas
     cur.execute("""
     CREATE TABLE IF NOT EXISTS prestamos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,10 +63,8 @@ def init_db():
 def agregar_cliente(nombre, identificacion, direccion, telefono):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("""
-        INSERT OR IGNORE INTO clientes (nombre, identificacion, direccion, telefono)
-        VALUES (?, ?, ?, ?)
-    """, (nombre, identificacion, direccion, telefono))
+    cur.execute("INSERT OR IGNORE INTO clientes (nombre, identificacion, direccion, telefono) VALUES (?,?,?,?)",
+                (nombre, identificacion, direccion, telefono))
     conn.commit()
     conn.close()
 
@@ -78,19 +74,30 @@ def obtener_clientes():
     conn.close()
     return df
 
+def eliminar_cliente(cliente_id):
+    conn = get_conn()
+    cur = conn.cursor()
+    # Borrar avales relacionados
+    cur.execute("DELETE FROM avales WHERE cliente_id = ?", (cliente_id,))
+    # Borrar pagos y prestamos relacionados
+    cur.execute("DELETE FROM pagos WHERE prestamo_id IN (SELECT id FROM prestamos WHERE cliente_id=?)", (cliente_id,))
+    cur.execute("DELETE FROM prestamos WHERE cliente_id = ?", (cliente_id,))
+    # Borrar cliente
+    cur.execute("DELETE FROM clientes WHERE id = ?", (cliente_id,))
+    conn.commit()
+    conn.close()
+
 def agregar_aval(cliente_id, nombre, identificacion, direccion, telefono):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO avales (cliente_id, nombre, identificacion, direccion, telefono)
-        VALUES (?, ?, ?, ?, ?)
-    """, (cliente_id, nombre, identificacion, direccion, telefono))
+    cur.execute("INSERT INTO avales (cliente_id, nombre, identificacion, direccion, telefono) VALUES (?,?,?,?,?)",
+                (cliente_id, nombre, identificacion, direccion, telefono))
     conn.commit()
     conn.close()
 
 def obtener_avales(cliente_id):
     conn = get_conn()
-    df = pd.read_sql_query("SELECT * FROM avales WHERE cliente_id = ? ORDER BY id", conn, params=(cliente_id,))
+    df = pd.read_sql_query("SELECT * FROM avales WHERE cliente_id = ? ORDER BY id DESC", conn, params=(cliente_id,))
     conn.close()
     return df
 
@@ -223,13 +230,25 @@ if menu == "Clientes":
                     st.success(f"Cliente '{nombre.strip()}' agregado.")
                     st.session_state['refresh'] = True
 
-        # Seleccionar cliente para añadir avales
+        st.markdown("### ➖ Eliminar Cliente")
+        clientes_df = obtener_clientes()
+        if clientes_df.empty:
+            st.info("No hay clientes para eliminar.")
+        else:
+            cliente_eliminar = st.selectbox("Selecciona cliente para eliminar", options=clientes_df['nombre'], key="elim_cliente")
+            confirmar = st.checkbox(f"Confirmar eliminación de '{cliente_eliminar}'", key="confirma_elim")
+            if st.button("Eliminar Cliente") and confirmar:
+                cliente_id_elim = int(clientes_df[clientes_df['nombre'] == cliente_eliminar]['id'].values[0])
+                eliminar_cliente(cliente_id_elim)
+                st.success(f"Cliente '{cliente_eliminar}' eliminado.")
+                st.session_state['refresh'] = True
+
         st.markdown("### 👥 Seleccionar Cliente para Avales")
         clientes_df = obtener_clientes()
         if clientes_df.empty:
             st.info("No hay clientes.")
         else:
-            cliente_sel = st.selectbox("Clientes", options=clientes_df['nombre'])
+            cliente_sel = st.selectbox("Clientes", options=clientes_df['nombre'], key="cliente_para_aval")
             cliente_id = int(clientes_df[clientes_df['nombre']==cliente_sel]['id'].values[0])
             
             st.markdown("### ➕ Agregar Aval")
@@ -372,7 +391,8 @@ elif menu == "Reporte":
             pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
             st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
 
-# Al final del script, fuera de formularios:
+# Controlar refresco sin usar experimental_rerun dentro del formulario
 if st.session_state.get('refresh', False):
     st.session_state['refresh'] = False
     st.experimental_rerun()
+
