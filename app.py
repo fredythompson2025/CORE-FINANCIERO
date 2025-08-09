@@ -404,5 +404,5 @@ elif menu == "Reporte":
             "Fecha": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
             "Cuota": "${:,.2f}",
             "Interes": "${:,.2f}",
-            "Amortizacion": "${:,.2f}",
+            "Amortizacion": "${:,.2f}",)
            
