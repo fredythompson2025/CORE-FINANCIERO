@@ -70,6 +70,15 @@ def modificar_cliente(id_cliente, nombre, identificacion, direccion, telefono):
 def eliminar_cliente(id_cliente):
     conn = get_conn()
     cur = conn.cursor()
+    # Borra pagos asociados a préstamos de este cliente
+    cur.execute("""
+        DELETE FROM pagos WHERE prestamo_id IN (
+            SELECT id FROM prestamos WHERE cliente_id=?
+        )
+    """, (id_cliente,))
+    # Borra préstamos del cliente
+    cur.execute("DELETE FROM prestamos WHERE cliente_id=?", (id_cliente,))
+    # Finalmente borra el cliente
     cur.execute("DELETE FROM clientes WHERE id=?", (id_cliente,))
     conn.commit()
     conn.close()
@@ -244,9 +253,12 @@ if menu == "Clientes":
             cliente_del = df_clientes_del[df_clientes_del['nombre'] == cliente_del_sel].iloc[0]
             eliminar_submitted = st.form_submit_button("🗑️ Eliminar Cliente")
             if eliminar_submitted:
-                eliminar_cliente(cliente_del['id'])
-                st.success(f"Cliente '{cliente_del_sel}' eliminado.")
-                st.session_state['refresh'] = True
+                try:
+                    eliminar_cliente(cliente_del['id'])
+                    st.success(f"Cliente '{cliente_del_sel}' eliminado junto con sus préstamos y pagos.")
+                    st.session_state['refresh'] = True
+                except Exception as e:
+                    st.error(f"Error al eliminar cliente: {e}")
 
     with col2:
         st.markdown("### 📋 Clientes registrados")
@@ -363,3 +375,4 @@ elif menu == "Reporte":
 if st.session_state.get('refresh', False):
     st.session_state['refresh'] = False
     st.experimental_rerun()
+
