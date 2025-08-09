@@ -1,5 +1,0 @@
-streamlit
-pandas
-xlsxwriter
-reportlab
-sqlite3-binary
