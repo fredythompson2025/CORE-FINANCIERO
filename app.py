@@ -201,9 +201,6 @@ with st.sidebar:
 
 menu = st.session_state['menu']
 
-if 'refresh' not in st.session_state:
-    st.session_state['refresh'] = False
-
 if menu == "Clientes":
     st.markdown("## 👥 Clientes")
     col1, col2 = st.columns([2, 3])
@@ -220,7 +217,6 @@ if menu == "Clientes":
                 else:
                     agregar_cliente(nombre.strip(), identificacion.strip(), direccion.strip(), telefono.strip())
                     st.success(f"Cliente '{nombre.strip()}' agregado.")
-                    st.session_state['refresh'] = True
 
         with st.form("form_modificar_cliente"):
             st.markdown("### ✏️ Modificar Cliente")
@@ -235,7 +231,6 @@ if menu == "Clientes":
             if modificar_submitted:
                 modificar_cliente(cliente_mod['id'], nombre_mod.strip(), identificacion_mod.strip(), direccion_mod.strip(), telefono_mod.strip())
                 st.success(f"Cliente '{nombre_mod.strip()}' modificado.")
-                st.session_state['refresh'] = True
 
         with st.form("form_eliminar_cliente"):
             st.markdown("### 🗑️ Eliminar Cliente")
@@ -246,7 +241,6 @@ if menu == "Clientes":
             if eliminar_submitted:
                 eliminar_cliente(cliente_del['id'])
                 st.success(f"Cliente '{cliente_del_sel}' eliminado.")
-                st.session_state['refresh'] = True
 
     with col2:
         st.markdown("### 📋 Clientes registrados")
@@ -275,7 +269,6 @@ elif menu == "Préstamos":
                     cliente_id = int(df_clientes[df_clientes['nombre']==cliente_sel]['id'].values[0])
                     agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
                     st.success(f"Préstamo creado para {cliente_sel}.")
-                    st.session_state['refresh'] = True
 
         with col2:
             st.markdown("### 📋 Préstamos existentes")
@@ -312,7 +305,6 @@ elif menu == "Pagos":
                     else:
                         agregar_pago(prestamo_id, fecha_pago, monto_pago)
                         st.success("Pago registrado.")
-                        st.session_state['refresh'] = True
 
         with col2:
             pagos = obtener_pagos(prestamo_id)
@@ -358,8 +350,3 @@ elif menu == "Reporte":
         if st.button("📥 Descargar cronograma PDF"):
             pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
             st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
-
-# Refrescar si necesario
-if st.session_state.get('refresh', False):
-    st.session_state['refresh'] = False
-    st.experimental_rerun()
