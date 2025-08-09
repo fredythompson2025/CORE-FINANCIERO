@@ -10,6 +10,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 
 DB_PATH = "cartera_prestamos.db"
 
+# -- DB helpers --
 def get_conn():
     conn = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
     conn.row_factory = sqlite3.Row
@@ -18,11 +19,27 @@ def get_conn():
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
+    # Tabla clientes con campos nuevos
     cur.execute("""
     CREATE TABLE IF NOT EXISTS clientes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre TEXT NOT NULL UNIQUE
+        nombre TEXT NOT NULL UNIQUE,
+        identificacion TEXT,
+        direccion TEXT,
+        telefono TEXT
     )""")
+    # Tabla avales relacionada a cliente
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS avales (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cliente_id INTEGER,
+        nombre TEXT NOT NULL,
+        identificacion TEXT,
+        direccion TEXT,
+        telefono TEXT,
+        FOREIGN KEY(cliente_id) REFERENCES clientes(id)
+    )""")
+    # Resto de tablas
     cur.execute("""
     CREATE TABLE IF NOT EXISTS prestamos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,16 +62,35 @@ def init_db():
     conn.commit()
     conn.close()
 
-def agregar_cliente(nombre):
+def agregar_cliente(nombre, identificacion, direccion, telefono):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("INSERT OR IGNORE INTO clientes (nombre) VALUES (?)", (nombre,))
+    cur.execute("""
+        INSERT OR IGNORE INTO clientes (nombre, identificacion, direccion, telefono)
+        VALUES (?, ?, ?, ?)
+    """, (nombre, identificacion, direccion, telefono))
     conn.commit()
     conn.close()
 
 def obtener_clientes():
     conn = get_conn()
     df = pd.read_sql_query("SELECT * FROM clientes ORDER BY id DESC", conn)
+    conn.close()
+    return df
+
+def agregar_aval(cliente_id, nombre, identificacion, direccion, telefono):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO avales (cliente_id, nombre, identificacion, direccion, telefono)
+        VALUES (?, ?, ?, ?, ?)
+    """, (cliente_id, nombre, identificacion, direccion, telefono))
+    conn.commit()
+    conn.close()
+
+def obtener_avales(cliente_id):
+    conn = get_conn()
+    df = pd.read_sql_query("SELECT * FROM avales WHERE cliente_id = ? ORDER BY id", conn, params=(cliente_id,))
     conn.close()
     return df
 
@@ -90,6 +126,7 @@ def obtener_pagos(prestamo_id):
     conn.close()
     return df
 
+# -- Amortización simple francés --
 def calcular_cronograma(monto, tasa_anual, plazo_meses, frecuencia, fecha_desembolso):
     pagos_totales = int(plazo_meses * frecuencia / 12)
     tasa_periodo = tasa_anual / 100 / frecuencia
@@ -131,6 +168,7 @@ def estado_cuotas(cronograma, pagos):
     cronograma['Estado'] = cronograma.apply(lambda r: 'Vencida' if r['Fecha'] < hoy and r['Pendiente'] > 0 else 'Al día', axis=1)
     return cronograma
 
+# -- Exportar PDF --
 def exportar_pdf(df, cliente, prestamo_id):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
@@ -152,6 +190,8 @@ def exportar_pdf(df, cliente, prestamo_id):
     buffer.seek(0)
     return buffer
 
+# -- Streamlit UI --
+
 st.set_page_config("💰 Sistema Préstamos", layout="wide", page_icon="💸")
 init_db()
 
@@ -160,41 +200,84 @@ st.divider()
 
 menu = st.sidebar.selectbox("📋 Menú", ["Clientes", "Préstamos", "Pagos", "Reporte"])
 
-# Estado local para controlar refresco sin rerun
-if 'clientes' not in st.session_state:
-    st.session_state['clientes'] = obtener_clientes()
-if 'prestamos' not in st.session_state:
-    st.session_state['prestamos'] = obtener_prestamos()
+if 'refresh' not in st.session_state:
+    st.session_state['refresh'] = False
 
 if menu == "Clientes":
-    st.markdown("## 👥 Clientes")
-    col1, col2 = st.columns([2, 3])
+    st.markdown("## 👥 Clientes y Avales")
+    col1, col2 = st.columns([3, 5])
+
     with col1:
+        st.markdown("### ➕ Agregar Cliente")
         with st.form("form_cliente"):
-            nombre = st.text_input("Nombre completo", placeholder="Ej: Juan Pérez")
-            submitted = st.form_submit_button("➕ Agregar Cliente")
+            nombre = st.text_input("Nombre completo")
+            identificacion = st.text_input("Identificación")
+            direccion = st.text_area("Dirección")
+            telefono = st.text_input("Teléfono")
+            submitted = st.form_submit_button("Agregar Cliente")
             if submitted:
                 if nombre.strip() == "":
                     st.error("Debe ingresar un nombre")
                 else:
-                    agregar_cliente(nombre.strip())
+                    agregar_cliente(nombre.strip(), identificacion.strip(), direccion.strip(), telefono.strip())
                     st.success(f"Cliente '{nombre.strip()}' agregado.")
-                    st.session_state['clientes'] = obtener_clientes()
+                    st.session_state['refresh'] = True
+
+        # Seleccionar cliente para añadir avales
+        st.markdown("### 👥 Seleccionar Cliente para Avales")
+        clientes_df = obtener_clientes()
+        if clientes_df.empty:
+            st.info("No hay clientes.")
+        else:
+            cliente_sel = st.selectbox("Clientes", options=clientes_df['nombre'])
+            cliente_id = int(clientes_df[clientes_df['nombre']==cliente_sel]['id'].values[0])
+            
+            st.markdown("### ➕ Agregar Aval")
+            with st.form("form_aval"):
+                aval_nombre = st.text_input("Nombre Aval")
+                aval_identificacion = st.text_input("Identificación Aval")
+                aval_direccion = st.text_area("Dirección Aval")
+                aval_telefono = st.text_input("Teléfono Aval")
+                submitted_aval = st.form_submit_button("Agregar Aval")
+                if submitted_aval:
+                    if aval_nombre.strip() == "":
+                        st.error("Debe ingresar nombre del aval")
+                    else:
+                        agregar_aval(cliente_id, aval_nombre.strip(), aval_identificacion.strip(), aval_direccion.strip(), aval_telefono.strip())
+                        st.success(f"Aval '{aval_nombre.strip()}' agregado para cliente '{cliente_sel}'.")
+                        st.session_state['refresh'] = True
 
     with col2:
         st.markdown("### 📋 Clientes registrados")
-        st.dataframe(st.session_state['clientes'].style.format({"id": "{:.0f}"}).set_properties(**{'text-align': 'center'}))
+        clientes_df = obtener_clientes()
+        st.dataframe(clientes_df.style.format({
+            "id": "{:.0f}"
+        }).set_properties(**{'text-align': 'center'}))
+        
+        if not clientes_df.empty:
+            cliente_sel2 = st.selectbox("Ver Avales de Cliente", options=clientes_df['nombre'], key="ver_avales")
+            cliente_id2 = int(clientes_df[clientes_df['nombre']==cliente_sel2]['id'].values[0])
+            avales_df = obtener_avales(cliente_id2)
+            st.markdown(f"### Avales de {cliente_sel2}")
+            if avales_df.empty:
+                st.info("No hay avales para este cliente.")
+            else:
+                st.dataframe(avales_df.style.format({
+                    "id": "{:.0f}"
+                }).set_properties(**{'text-align': 'center'}))
+
     st.divider()
 
 elif menu == "Préstamos":
     st.markdown("## 🏦 Préstamos")
-    if st.session_state['clientes'].empty:
+    df_clientes = obtener_clientes()
+    if df_clientes.empty:
         st.info("📌 Agrega primero clientes.")
     else:
         col1, col2 = st.columns([2, 3])
         with col1:
             with st.form("form_prestamo"):
-                cliente_sel = st.selectbox("Cliente", st.session_state['clientes']['nombre'])
+                cliente_sel = st.selectbox("Cliente", df_clientes['nombre'])
                 monto = st.number_input("Monto", min_value=0.0, value=1000.0, step=100.0, format="%.2f")
                 tasa = st.number_input("Tasa anual (%)", min_value=0.0, value=12.0, step=0.1, format="%.2f")
                 plazo = st.number_input("Plazo (meses)", min_value=1, value=12)
@@ -202,14 +285,15 @@ elif menu == "Préstamos":
                 fecha_desembolso = st.date_input("Fecha de desembolso", value=date.today())
                 submitted = st.form_submit_button("🏦 Crear préstamo")
                 if submitted:
-                    cliente_id = int(st.session_state['clientes'][st.session_state['clientes']['nombre']==cliente_sel]['id'].values[0])
+                    cliente_id = int(df_clientes[df_clientes['nombre']==cliente_sel]['id'].values[0])
                     agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
                     st.success(f"Préstamo creado para {cliente_sel}.")
-                    st.session_state['prestamos'] = obtener_prestamos()
+                    st.session_state['refresh'] = True
 
         with col2:
             st.markdown("### 📋 Préstamos existentes")
-            st.dataframe(st.session_state['prestamos'].style.format({
+            df_prestamos = obtener_prestamos()
+            st.dataframe(df_prestamos.style.format({
                 "id": "{:.0f}",
                 "monto": "${:,.2f}",
                 "tasa": "{:.2f}%",
@@ -221,12 +305,13 @@ elif menu == "Préstamos":
 
 elif menu == "Pagos":
     st.markdown("## 💵 Registrar Pagos")
-    if st.session_state['prestamos'].empty:
+    df_prestamos = obtener_prestamos()
+    if df_prestamos.empty:
         st.info("📌 No hay préstamos.")
     else:
-        prestamo_sel = st.selectbox("Selecciona préstamo", st.session_state['prestamos']['id'].astype(str) + " - " + st.session_state['prestamos']['cliente'])
+        prestamo_sel = st.selectbox("Selecciona préstamo", df_prestamos['id'].astype(str) + " - " + df_prestamos['cliente'])
         prestamo_id = int(prestamo_sel.split(" - ")[0])
-        df_prestamo = st.session_state['prestamos'][st.session_state['prestamos']['id'] == prestamo_id].iloc[0]
+        df_prestamo = df_prestamos[df_prestamos['id'] == prestamo_id].iloc[0]
         st.markdown(f"**Préstamo de {df_prestamo['cliente']}** - Monto: ${df_prestamo['monto']:.2f} | Tasa: {df_prestamo['tasa']:.2f}% | Plazo: {df_prestamo['plazo']} meses")
         col1, col2 = st.columns([2, 3])
         with col1:
@@ -240,6 +325,7 @@ elif menu == "Pagos":
                     else:
                         agregar_pago(prestamo_id, fecha_pago, monto_pago)
                         st.success("Pago registrado.")
+                        st.session_state['refresh'] = True
 
         with col2:
             pagos = obtener_pagos(prestamo_id)
@@ -254,12 +340,13 @@ elif menu == "Pagos":
 
 elif menu == "Reporte":
     st.markdown("## 📊 Reporte y Cronograma")
-    if st.session_state['prestamos'].empty:
+    df_prestamos = obtener_prestamos()
+    if df_prestamos.empty:
         st.info("📌 No hay préstamos.")
     else:
-        prestamo_sel = st.selectbox("Selecciona préstamo", st.session_state['prestamos']['id'].astype(str) + " - " + st.session_state['prestamos']['cliente'])
+        prestamo_sel = st.selectbox("Selecciona préstamo", df_prestamos['id'].astype(str) + " - " + df_prestamos['cliente'])
         prestamo_id = int(prestamo_sel.split(" - ")[0])
-        df_prestamo = st.session_state['prestamos'][st.session_state['prestamos']['id'] == prestamo_id].iloc[0]
+        df_prestamo = df_prestamos[df_prestamos['id'] == prestamo_id].iloc[0]
         cronograma = calcular_cronograma(
             df_prestamo['monto'],
             df_prestamo['tasa'],
@@ -284,3 +371,8 @@ elif menu == "Reporte":
         if st.button("📥 Descargar cronograma PDF"):
             pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
             st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
+
+# Al final del script, fuera de formularios:
+if st.session_state.get('refresh', False):
+    st.session_state['refresh'] = False
+    st.experimental_rerun()
