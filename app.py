@@ -248,14 +248,12 @@ elif menu == "Pagos":
         with col2:
             pagos = obtener_pagos(prestamo_id)
             st.markdown("### 🧾 Pagos registrados")
-            st.dataframe(
-                pagos.style.format({
-                    "id": "{:.0f}",
-                    "prestamo_id": "{:.0f}",
-                    "fecha_pago": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
-                    "monto": "${:,.2f}"
-                }).set_properties(**{'text-align': 'center'})
-            )
+            st.dataframe(pagos.style.format({
+                "id": "{:.0f}",
+                "prestamo_id": "{:.0f}",
+                "fecha_pago": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
+                "monto": "${:,.2f}"
+            }).set_properties(**{'text-align': 'center'}))
     st.divider()
 
 elif menu == "Reporte":
