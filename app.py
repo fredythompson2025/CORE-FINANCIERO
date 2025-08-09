@@ -206,7 +206,6 @@ init_db()
 st.markdown("<h1 style='text-align:center; color: darkblue;'>💰 Sistema de Gestión de Préstamos</h1>", unsafe_allow_html=True)
 st.divider()
 
-# Control para recargar datos clientes y préstamos
 if "update_clientes" not in st.session_state:
     st.session_state.update_clientes = True
 if "update_prestamos" not in st.session_state:
@@ -218,7 +217,6 @@ def recargar_clientes():
 def recargar_prestamos():
     st.session_state.update_prestamos = True
 
-# Cargar clientes si toca
 if st.session_state.update_clientes:
     df_clientes = obtener_clientes()
     st.session_state.df_clientes = df_clientes
@@ -226,7 +224,6 @@ if st.session_state.update_clientes:
 else:
     df_clientes = st.session_state.df_clientes
 
-# Cargar préstamos si toca
 if st.session_state.update_prestamos:
     df_prestamos = obtener_prestamos()
     st.session_state.df_prestamos = df_prestamos
@@ -234,18 +231,13 @@ if st.session_state.update_prestamos:
 else:
     df_prestamos = st.session_state.df_prestamos
 
-# Menú lateral general
 with st.sidebar:
     st.markdown("## 📋 Menú")
     menu = st.radio("", ["Clientes", "Préstamos", "Pagos", "Reporte"])
 
-# ==============================
-# Gestión Clientes con submenú tabs
-# ==============================
 if menu == "Clientes":
     tabs = st.tabs(["Agregar", "Modificar", "Eliminar", "Buscar"])
 
-    # --- Agregar ---
     with tabs[0]:
         st.markdown("### ➕ Agregar Cliente")
         with st.form("form_agregar"):
@@ -262,7 +254,6 @@ if menu == "Clientes":
                     st.success(f"Cliente '{nombre.strip()}' agregado.")
                     recargar_clientes()
 
-    # --- Modificar ---
     with tabs[1]:
         st.markdown("### ✏️ Modificar Cliente")
         if df_clientes.empty:
@@ -281,7 +272,6 @@ if menu == "Clientes":
                     st.success(f"Cliente '{nombre_mod.strip()}' modificado.")
                     recargar_clientes()
 
-    # --- Eliminar ---
     with tabs[2]:
         st.markdown("### 🗑️ Eliminar Cliente")
         if df_clientes.empty:
@@ -296,7 +286,6 @@ if menu == "Clientes":
                     st.success(f"Cliente '{cliente_sel}' eliminado.")
                     recargar_clientes()
 
-    # --- Buscar / Reporte ---
     with tabs[3]:
         st.markdown("### 📋 Reporte de Clientes")
         if df_clientes.empty:
@@ -304,9 +293,6 @@ if menu == "Clientes":
         else:
             st.dataframe(df_clientes.style.set_properties(**{'text-align': 'center'}))
 
-# ==============================
-# Gestión Préstamos
-# ==============================
 elif menu == "Préstamos":
     st.markdown("## 🏦 Préstamos")
     if df_clientes.empty:
@@ -344,9 +330,6 @@ elif menu == "Préstamos":
                     "fecha_desembolso": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y')
                 }).set_properties(**{'text-align': 'center'}))
 
-# ==============================
-# Gestión Pagos
-# ==============================
 elif menu == "Pagos":
     st.markdown("## 💵 Registrar Pagos")
     if df_prestamos.empty:
@@ -381,9 +364,6 @@ elif menu == "Pagos":
                     "monto": "${:,.2f}"
                 }).set_properties(**{'text-align': 'center'}))
 
-# ==============================
-# Reporte y Cronograma
-# ==============================
 elif menu == "Reporte":
     st.markdown("## 📊 Reporte y Cronograma")
     if df_prestamos.empty:
@@ -408,4 +388,16 @@ elif menu == "Reporte":
             "Cuota": "${:,.2f}",
             "Interes": "${:,.2f}",
             "Amortizacion": "${:,.2f}",
-            "Saldo": "${:
+            "Saldo": "${:,.2f}",
+            "Pagado": "${:,.2f}",
+            "Pendiente": "${:,.2f}",
+            "Estado": "{}"
+        }).set_properties(**{'text-align': 'center'}))
+
+        pdf_buffer = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
+        st.download_button(
+            label="📄 Descargar Cronograma PDF",
+            data=pdf_buffer,
+            file_name=f"Cronograma_Prestamo_{prestamo_id}.pdf",
+            mime="application/pdf"
+        )
