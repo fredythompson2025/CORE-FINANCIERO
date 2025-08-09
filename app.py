@@ -73,24 +73,11 @@ def modificar_cliente(id_cliente, nombre, identificacion, direccion, telefono):
 def eliminar_cliente(id_cliente):
     conn = get_conn()
     cur = conn.cursor()
-    try:
-        # Primero borrar pagos relacionados a préstamos del cliente
-        cur.execute("""
-            DELETE FROM pagos
-            WHERE prestamo_id IN (
-                SELECT id FROM prestamos WHERE cliente_id = ?
-            )
-        """, (id_cliente,))
-        # Luego borrar préstamos
-        cur.execute("DELETE FROM prestamos WHERE cliente_id = ?", (id_cliente,))
-        # Finalmente borrar cliente
-        cur.execute("DELETE FROM clientes WHERE id = ?", (id_cliente,))
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        conn.close()
+    cur.execute("DELETE FROM pagos WHERE prestamo_id IN (SELECT id FROM prestamos WHERE cliente_id = ?)", (id_cliente,))
+    cur.execute("DELETE FROM prestamos WHERE cliente_id = ?", (id_cliente,))
+    cur.execute("DELETE FROM clientes WHERE id=?", (id_cliente,))
+    conn.commit()
+    conn.close()
 
 def obtener_clientes():
     conn = get_conn()
