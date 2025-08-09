@@ -255,10 +255,7 @@ if menu == "Clientes":
                 else:
                     agregar_cliente(nombre.strip(), identificacion.strip(), direccion.strip(), telefono.strip())
                     st.success(f"Cliente '{nombre.strip()}' agregado.")
-                    # refrescar
-                    st.session_state['reload'] = not st.session_state['reload']
-                    st.experimental_rerun = None  # Para evitar error, no llamar más
-                    st.experimental_rerun()  # pero no se puede, así que solo refresh con session_state
+                    st.experimental_rerun()
 
     # --- Modificar ---
     with tabs[1]:
@@ -276,7 +273,7 @@ if menu == "Clientes":
                 if modificar_submitted:
                     modificar_cliente(cliente_mod['id'], nombre_mod.strip(), identificacion_mod.strip(), direccion_mod.strip(), telefono_mod.strip())
                     st.success(f"Cliente '{nombre_mod.strip()}' modificado.")
-                    st.session_state['reload'] = not st.session_state['reload']
+                    st.experimental_rerun()
 
     # --- Eliminar ---
     with tabs[2]:
@@ -290,7 +287,7 @@ if menu == "Clientes":
                 if eliminar_submitted:
                     eliminar_cliente(cliente_del['id'])
                     st.success(f"Cliente '{cliente_del_sel}' eliminado.")
-                    st.session_state['reload'] = not st.session_state['reload']
+                    st.experimental_rerun()
 
     # --- Buscar ---
     with tabs[3]:
@@ -298,7 +295,6 @@ if menu == "Clientes":
             st.info("No hay clientes registrados.")
         else:
             st.markdown("### 📋 Clientes registrados")
-            # Mostrar tabla actualizada según session_state
             df_clientes_actual = obtener_clientes()
             st.dataframe(df_clientes_actual.style.set_properties(**{'text-align': 'center'}))
 
@@ -328,7 +324,7 @@ elif menu == "Préstamos":
                         cliente_id = int(df_clientes[df_clientes['nombre'] == cliente_sel]['id'].values[0])
                         agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
                         st.success(f"Préstamo creado para {cliente_sel}.")
-                        st.session_state['reload'] = not st.session_state['reload']
+                        st.experimental_rerun()
 
         with col2:
             df_prestamos = obtener_prestamos()
@@ -367,7 +363,7 @@ elif menu == "Pagos":
                     else:
                         agregar_pago(prestamo_id, fecha_pago, monto_pago)
                         st.success("Pago registrado.")
-                        st.session_state['reload'] = not st.session_state['reload']
+                        st.experimental_rerun()
 
         with col2:
             pagos = obtener_pagos(prestamo_id)
@@ -394,12 +390,3 @@ elif menu == "Reporte":
             df_prestamo['tasa'],
             df_prestamo['plazo'],
             df_prestamo['frecuencia'],
-            pd.to_datetime(df_prestamo['fecha_desembolso']).date()
-        )
-        pagos = obtener_pagos(prestamo_id)
-        cron_estado = estado_cuotas(cronograma, pagos)
-
-        st.dataframe(cron_estado.style.format({
-            "Periodo": "{:.0f}",
-            "Fecha": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
-            "Cuota": "${
