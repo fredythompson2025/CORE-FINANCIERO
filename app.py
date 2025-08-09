@@ -73,8 +73,11 @@ def modificar_cliente(id_cliente, nombre, identificacion, direccion, telefono):
 def eliminar_cliente(id_cliente):
     conn = get_conn()
     cur = conn.cursor()
+    # Primero eliminar pagos relacionados a préstamos del cliente
     cur.execute("DELETE FROM pagos WHERE prestamo_id IN (SELECT id FROM prestamos WHERE cliente_id = ?)", (id_cliente,))
+    # Luego eliminar préstamos del cliente
     cur.execute("DELETE FROM prestamos WHERE cliente_id = ?", (id_cliente,))
+    # Finalmente eliminar cliente
     cur.execute("DELETE FROM clientes WHERE id=?", (id_cliente,))
     conn.commit()
     conn.close()
@@ -214,13 +217,13 @@ with st.sidebar:
     if st.button("👥 Clientes"):
         st.session_state['menu'] = "Clientes"
         st.experimental_rerun()
-    if st.button("🏦 Préstamos"):
+    elif st.button("🏦 Préstamos"):
         st.session_state['menu'] = "Préstamos"
         st.experimental_rerun()
-    if st.button("💵 Pagos"):
+    elif st.button("💵 Pagos"):
         st.session_state['menu'] = "Pagos"
         st.experimental_rerun()
-    if st.button("📊 Reporte"):
+    elif st.button("📊 Reporte"):
         st.session_state['menu'] = "Reporte"
         st.experimental_rerun()
 
