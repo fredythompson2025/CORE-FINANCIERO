@@ -240,51 +240,45 @@ if menu == "Clientes":
 
     with tabs[0]:
         st.markdown("### ➕ Agregar Cliente")
-        with st.form("form_agregar"):
-            nombre = st.text_input("Nombre completo", key="agregar_nombre")
-            identificacion = st.text_input("Identificación", key="agregar_id")
-            direccion = st.text_input("Dirección", key="agregar_dir")
-            telefono = st.text_input("Teléfono", key="agregar_tel")
-            submitted = st.form_submit_button("Agregar Cliente")
-            if submitted:
-                if nombre.strip() == "":
-                    st.error("Debe ingresar un nombre")
-                else:
-                    agregar_cliente(nombre.strip(), identificacion.strip(), direccion.strip(), telefono.strip())
-                    st.success(f"Cliente '{nombre.strip()}' agregado.")
-                    recargar_clientes()
+        nombre = st.text_input("Nombre completo", key="agregar_nombre")
+        identificacion = st.text_input("Identificación", key="agregar_id")
+        direccion = st.text_input("Dirección", key="agregar_dir")
+        telefono = st.text_input("Teléfono", key="agregar_tel")
+        if st.button("Agregar Cliente"):
+            if nombre.strip() == "":
+                st.error("Debe ingresar un nombre")
+            else:
+                agregar_cliente(nombre.strip(), identificacion.strip(), direccion.strip(), telefono.strip())
+                st.success(f"Cliente '{nombre.strip()}' agregado.")
+                recargar_clientes()
 
     with tabs[1]:
         st.markdown("### ✏️ Modificar Cliente")
         if df_clientes.empty:
             st.info("No hay clientes para modificar")
         else:
-            with st.form("form_modificar"):
-                cliente_sel = st.selectbox("Selecciona cliente", df_clientes['nombre'], key="mod_cliente_select")
-                cliente = df_clientes[df_clientes['nombre'] == cliente_sel].iloc[0]
-                nombre_mod = st.text_input("Nombre", cliente['nombre'], key="mod_nombre")
-                identificacion_mod = st.text_input("Identificación", cliente['identificacion'], key="mod_id")
-                direccion_mod = st.text_input("Dirección", cliente['direccion'], key="mod_dir")
-                telefono_mod = st.text_input("Teléfono", cliente['telefono'], key="mod_tel")
-                modificar_submitted = st.form_submit_button("Modificar Cliente")
-                if modificar_submitted:
-                    modificar_cliente(cliente['id'], nombre_mod.strip(), identificacion_mod.strip(), direccion_mod.strip(), telefono_mod.strip())
-                    st.success(f"Cliente '{nombre_mod.strip()}' modificado.")
-                    recargar_clientes()
+            cliente_sel = st.selectbox("Selecciona cliente", df_clientes['nombre'], key="mod_cliente_select")
+            cliente = df_clientes[df_clientes['nombre'] == cliente_sel].iloc[0]
+            nombre_mod = st.text_input("Nombre", cliente['nombre'], key="mod_nombre")
+            identificacion_mod = st.text_input("Identificación", cliente['identificacion'], key="mod_id")
+            direccion_mod = st.text_input("Dirección", cliente['direccion'], key="mod_dir")
+            telefono_mod = st.text_input("Teléfono", cliente['telefono'], key="mod_tel")
+            if st.button("Modificar Cliente"):
+                modificar_cliente(cliente['id'], nombre_mod.strip(), identificacion_mod.strip(), direccion_mod.strip(), telefono_mod.strip())
+                st.success(f"Cliente '{nombre_mod.strip()}' modificado.")
+                recargar_clientes()
 
     with tabs[2]:
         st.markdown("### 🗑️ Eliminar Cliente")
         if df_clientes.empty:
             st.info("No hay clientes para eliminar")
         else:
-            with st.form("form_eliminar"):
-                cliente_sel = st.selectbox("Selecciona cliente para eliminar", df_clientes['nombre'], key="del_cliente_select")
+            cliente_sel = st.selectbox("Selecciona cliente para eliminar", df_clientes['nombre'], key="del_cliente_select")
+            if st.button("Eliminar Cliente"):
                 cliente = df_clientes[df_clientes['nombre'] == cliente_sel].iloc[0]
-                eliminar_submitted = st.form_submit_button("Eliminar Cliente")
-                if eliminar_submitted:
-                    eliminar_cliente(cliente['id'])
-                    st.success(f"Cliente '{cliente_sel}' eliminado.")
-                    recargar_clientes()
+                eliminar_cliente(cliente['id'])
+                st.success(f"Cliente '{cliente_sel}' eliminado.")
+                recargar_clientes()
 
     with tabs[3]:
         st.markdown("### 📋 Reporte de Clientes")
@@ -300,22 +294,20 @@ elif menu == "Préstamos":
     else:
         col1, col2 = st.columns([2, 3])
         with col1:
-            with st.form("form_prestamo"):
-                cliente_sel = st.selectbox("Cliente", df_clientes['nombre'], key="prestamo_cliente")
-                monto = st.number_input("Monto", min_value=0.0, value=1000.0, step=100.0, format="%.2f", key="prestamo_monto")
-                tasa = st.number_input("Tasa anual (%)", min_value=0.0, value=12.0, step=0.1, format="%.2f", key="prestamo_tasa")
-                plazo = st.number_input("Plazo (meses)", min_value=1, value=12, key="prestamo_plazo")
-                frecuencia = st.selectbox("Frecuencia de pagos por año", [12, 4, 2, 1], index=0, key="prestamo_frecuencia")
-                fecha_desembolso = st.date_input("Fecha de desembolso", value=date.today(), key="prestamo_fecha")
-                submitted = st.form_submit_button("Crear préstamo")
-                if submitted:
-                    if monto <= 0 or tasa < 0:
-                        st.error("Monto debe ser mayor que 0 y tasa no puede ser negativa.")
-                    else:
-                        cliente_id = int(df_clientes[df_clientes['nombre'] == cliente_sel]['id'].values[0])
-                        agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
-                        st.success(f"Préstamo creado para {cliente_sel}.")
-                        recargar_prestamos()
+            cliente_sel = st.selectbox("Cliente", df_clientes['nombre'], key="prestamo_cliente")
+            monto = st.number_input("Monto", min_value=0.0, value=1000.0, step=100.0, format="%.2f", key="prestamo_monto")
+            tasa = st.number_input("Tasa anual (%)", min_value=0.0, value=12.0, step=0.1, format="%.2f", key="prestamo_tasa")
+            plazo = st.number_input("Plazo (meses)", min_value=1, value=12, key="prestamo_plazo")
+            frecuencia = st.selectbox("Frecuencia de pagos por año", [12, 4, 2, 1], index=0, key="prestamo_frecuencia")
+            fecha_desembolso = st.date_input("Fecha de desembolso", value=date.today(), key="prestamo_fecha")
+            if st.button("Crear préstamo"):
+                if monto <= 0 or tasa < 0:
+                    st.error("Monto debe ser mayor que 0 y tasa no puede ser negativa.")
+                else:
+                    cliente_id = int(df_clientes[df_clientes['nombre'] == cliente_sel]['id'].values[0])
+                    agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
+                    st.success(f"Préstamo creado para {cliente_sel}.")
+                    recargar_prestamos()
 
         with col2:
             if df_prestamos.empty:
@@ -340,29 +332,24 @@ elif menu == "Pagos":
         df_prestamo = df_prestamos[df_prestamos['id'] == prestamo_id].iloc[0]
         st.markdown(f"**Préstamo de {df_prestamo['cliente']}** - Monto: ${df_prestamo['monto']:.2f} | Tasa: {df_prestamo['tasa']:.2f}% | Plazo: {df_prestamo['plazo']} meses")
 
-        col1, col2 = st.columns([2, 3])
-        with col1:
-            with st.form("form_pago"):
-                fecha_pago = st.date_input("Fecha pago", value=date.today(), key="pago_fecha")
-                monto_pago = st.number_input("Monto pago", min_value=0.0, value=0.0, step=10.0, format="%.2f", key="pago_monto")
-                submitted = st.form_submit_button("Registrar pago")
-                if submitted:
-                    if monto_pago <= 0:
-                        st.error("Monto debe ser mayor a cero")
-                    else:
-                        agregar_pago(prestamo_id, fecha_pago, monto_pago)
-                        st.success("Pago registrado.")
-
-        with col2:
-            pagos = obtener_pagos(prestamo_id)
-            if pagos.empty:
-                st.info("No hay pagos registrados para este préstamo.")
+        fecha_pago = st.date_input("Fecha pago", value=date.today(), key="pago_fecha")
+        monto_pago = st.number_input("Monto pago", min_value=0.0, value=0.0, step=10.0, format="%.2f", key="pago_monto")
+        if st.button("Registrar pago"):
+            if monto_pago <= 0:
+                st.error("Monto debe ser mayor a cero")
             else:
-                st.markdown("### Pagos registrados")
-                st.dataframe(pagos.style.format({
-                    "fecha_pago": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
-                    "monto": "${:,.2f}"
-                }).set_properties(**{'text-align': 'center'}))
+                agregar_pago(prestamo_id, fecha_pago, monto_pago)
+                st.success("Pago registrado.")
+
+        pagos = obtener_pagos(prestamo_id)
+        if pagos.empty:
+            st.info("No hay pagos registrados para este préstamo.")
+        else:
+            st.markdown("### Pagos registrados")
+            st.dataframe(pagos.style.format({
+                "fecha_pago": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
+                "monto": "${:,.2f}"
+            }).set_properties(**{'text-align': 'center'}))
 
 elif menu == "Reporte":
     st.markdown("## 📊 Reporte y Cronograma")
@@ -372,32 +359,34 @@ elif menu == "Reporte":
         prestamo_sel = st.selectbox("Selecciona préstamo", df_prestamos['id'].astype(str) + " - " + df_prestamos['cliente'])
         prestamo_id = int(prestamo_sel.split(" - ")[0])
         df_prestamo = df_prestamos[df_prestamos['id'] == prestamo_id].iloc[0]
-        cronograma = calcular_cronograma(
-            df_prestamo['monto'],
-            df_prestamo['tasa'],
-            df_prestamo['plazo'],
-            df_prestamo['frecuencia'],
-            pd.to_datetime(df_prestamo['fecha_desembolso']).date()
-        )
-        pagos = obtener_pagos(prestamo_id)
-        cron_estado = estado_cuotas(cronograma, pagos)
 
-        st.dataframe(cron_estado.style.format({
-            "Periodo": "{:.0f}",
-            "Fecha": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
-            "Cuota": "${:,.2f}",
-            "Interes": "${:,.2f}",
-            "Amortizacion": "${:,.2f}",
-            "Saldo": "${:,.2f}",
-            "Pagado": "${:,.2f}",
-            "Pendiente": "${:,.2f}",
-            "Estado": "{}"
-        }).set_properties(**{'text-align': 'center'}))
+        if st.button("Generar cronograma"):
+            cronograma = calcular_cronograma(
+                df_prestamo['monto'],
+                df_prestamo['tasa'],
+                df_prestamo['plazo'],
+                df_prestamo['frecuencia'],
+                pd.to_datetime(df_prestamo['fecha_desembolso']).date()
+            )
+            pagos = obtener_pagos(prestamo_id)
+            cron_estado = estado_cuotas(cronograma, pagos)
 
-        pdf_buffer = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
-        st.download_button(
-            label="📄 Descargar Cronograma PDF",
-            data=pdf_buffer,
-            file_name=f"Cronograma_Prestamo_{prestamo_id}.pdf",
-            mime="application/pdf"
-        )
+            st.dataframe(cron_estado.style.format({
+                "Periodo": "{:.0f}",
+                "Fecha": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
+                "Cuota": "${:,.2f}",
+                "Interes": "${:,.2f}",
+                "Amortizacion": "${:,.2f}",
+                "Saldo": "${:,.2f}",
+                "Pagado": "${:,.2f}",
+                "Pendiente": "${:,.2f}",
+                "Estado": "{}"
+            }).set_properties(**{'text-align': 'center'}))
+
+            pdf_buffer = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
+            st.download_button(
+                label="📄 Descargar Cronograma PDF",
+                data=pdf_buffer,
+                file_name=f"Cronograma_Prestamo_{prestamo_id}.pdf",
+                mime="application/pdf"
+            )
