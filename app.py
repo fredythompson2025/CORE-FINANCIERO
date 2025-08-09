@@ -70,15 +70,6 @@ def modificar_cliente(id_cliente, nombre, identificacion, direccion, telefono):
 def eliminar_cliente(id_cliente):
     conn = get_conn()
     cur = conn.cursor()
-    # Eliminar pagos relacionados
-    cur.execute("""
-        DELETE FROM pagos WHERE prestamo_id IN (
-            SELECT id FROM prestamos WHERE cliente_id=?
-        )
-    """, (id_cliente,))
-    # Eliminar prestamos relacionados
-    cur.execute("DELETE FROM prestamos WHERE cliente_id=?", (id_cliente,))
-    # Eliminar cliente
     cur.execute("DELETE FROM clientes WHERE id=?", (id_cliente,))
     conn.commit()
     conn.close()
@@ -193,10 +184,9 @@ init_db()
 st.markdown("<h1 style='text-align:center; color: darkblue;'>💰 Sistema de Gestión de Préstamos</h1>", unsafe_allow_html=True)
 st.divider()
 
+# Menú con botones en la sidebar
 if 'menu' not in st.session_state:
     st.session_state['menu'] = "Clientes"
-if 'refresh' not in st.session_state:
-    st.session_state['refresh'] = False
 
 with st.sidebar:
     st.markdown("## 📋 Menú")
@@ -210,6 +200,9 @@ with st.sidebar:
         st.session_state['menu'] = "Reporte"
 
 menu = st.session_state['menu']
+
+if 'refresh' not in st.session_state:
+    st.session_state['refresh'] = False
 
 if menu == "Clientes":
     st.markdown("## 👥 Clientes")
@@ -251,12 +244,9 @@ if menu == "Clientes":
             cliente_del = df_clientes_del[df_clientes_del['nombre'] == cliente_del_sel].iloc[0]
             eliminar_submitted = st.form_submit_button("🗑️ Eliminar Cliente")
             if eliminar_submitted:
-                try:
-                    eliminar_cliente(cliente_del['id'])
-                    st.success(f"Cliente '{cliente_del_sel}' eliminado junto con sus préstamos y pagos.")
-                    st.session_state['refresh'] = True
-                except Exception as e:
-                    st.error(f"Error al eliminar cliente: {e}")
+                eliminar_cliente(cliente_del['id'])
+                st.success(f"Cliente '{cliente_del_sel}' eliminado.")
+                st.session_state['refresh'] = True
 
     with col2:
         st.markdown("### 📋 Clientes registrados")
@@ -369,8 +359,7 @@ elif menu == "Reporte":
             pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
             st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
 
-# Control para refrescar la página sin usar experimental_rerun
+# Refrescar si necesario
 if st.session_state.get('refresh', False):
     st.session_state['refresh'] = False
-    # Como no usas experimental_rerun, sólo cambias el menú para forzar redibujo
-    st.experimental_set_query_params(menu=menu)
+    st.experimental_rerun()
