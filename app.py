@@ -19,7 +19,6 @@ def get_conn():
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
-    # Clientes con campos adicionales
     cur.execute("""
     CREATE TABLE IF NOT EXISTS clientes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,23 +52,15 @@ def init_db():
 def agregar_cliente(nombre, identificacion, direccion, telefono):
     conn = get_conn()
     cur = conn.cursor()
-    # Convertir None o vacíos a cadena vacía para evitar error
-    cur.execute(
-        "INSERT OR IGNORE INTO clientes (nombre, identificacion, direccion, telefono) VALUES (?,?,?,?)",
-        (
-            str(nombre) if nombre else "",
-            str(identificacion) if identificacion else "",
-            str(direccion) if direccion else "",
-            str(telefono) if telefono else ""
-        )
-    )
+    cur.execute("INSERT OR IGNORE INTO clientes (nombre, identificacion, direccion, telefono) VALUES (?,?,?,?)",
+                (nombre, identificacion, direccion, telefono))
     conn.commit()
     conn.close()
 
 def eliminar_cliente(cliente_id):
     conn = get_conn()
     cur = conn.cursor()
-    # Primero eliminar prestamos y pagos relacionados para evitar errores FK
+    # Primero eliminar prestamos y pagos asociados para evitar errores de integridad referencial
     cur.execute("DELETE FROM pagos WHERE prestamo_id IN (SELECT id FROM prestamos WHERE cliente_id=?)", (cliente_id,))
     cur.execute("DELETE FROM prestamos WHERE cliente_id=?", (cliente_id,))
     cur.execute("DELETE FROM clientes WHERE id=?", (cliente_id,))
@@ -81,6 +72,8 @@ def obtener_clientes():
     df = pd.read_sql_query("SELECT * FROM clientes ORDER BY id DESC", conn)
     conn.close()
     return df
+
+# Funciones de préstamos y pagos (sin cambios)
 
 def agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso):
     conn = get_conn()
@@ -114,7 +107,8 @@ def obtener_pagos(prestamo_id):
     conn.close()
     return df
 
-# -- Amortización simple francés --
+# Amortización, cronograma y PDF (sin cambios)
+
 def calcular_cronograma(monto, tasa_anual, plazo_meses, frecuencia, fecha_desembolso):
     pagos_totales = int(plazo_meses * frecuencia / 12)
     tasa_periodo = tasa_anual / 100 / frecuencia
@@ -156,7 +150,6 @@ def estado_cuotas(cronograma, pagos):
     cronograma['Estado'] = cronograma.apply(lambda r: 'Vencida' if r['Fecha'] < hoy and r['Pendiente'] > 0 else 'Al día', axis=1)
     return cronograma
 
-# -- Exportar PDF --
 def exportar_pdf(df, cliente, prestamo_id):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
@@ -194,12 +187,13 @@ if 'refresh' not in st.session_state:
 if menu == "Clientes":
     st.markdown("## 👥 Clientes")
     col1, col2 = st.columns([2, 3])
+
     with col1:
         with st.form("form_cliente"):
             nombre = st.text_input("Nombre completo", placeholder="Ej: Juan Pérez")
-            identificacion = st.text_input("Identificación (ID, NIT, etc.)")
-            direccion = st.text_area("Dirección")
-            telefono = st.text_input("Número de teléfono")
+            identificacion = st.text_input("Identificación")
+            direccion = st.text_input("Dirección")
+            telefono = st.text_input("Teléfono")
             submitted = st.form_submit_button("➕ Agregar Cliente")
             if submitted:
                 if nombre.strip() == "":
@@ -209,36 +203,20 @@ if menu == "Clientes":
                     st.success(f"Cliente '{nombre.strip()}' agregado.")
                     st.session_state['refresh'] = True
 
-        st.divider()
-        st.markdown("### ❌ Eliminar cliente")
-        df_clientes = obtener_clientes()
-        if df_clientes.empty:
-            st.info("No hay clientes para eliminar.")
-        else:
-            cliente_a_eliminar = st.selectbox("Selecciona cliente para eliminar", df_clientes['nombre'])
-            if st.button("🗑️ Eliminar cliente"):
-                cliente_id = int(df_clientes[df_clientes['nombre'] == cliente_a_eliminar]['id'].values[0])
-                eliminar_cliente(cliente_id)
-                st.success(f"Cliente '{cliente_a_eliminar}' eliminado.")
-                st.session_state['refresh'] = True
-
     with col2:
         st.markdown("### 📋 Clientes registrados")
         df_clientes = obtener_clientes()
-        if not df_clientes.empty:
-            # Mostrar con diseño elegante
-            st.dataframe(
-                df_clientes.style.format({"id": "{:.0f}"}).set_properties(**{
-                    'text-align': 'center',
-                    'font-family': 'Arial',
-                    'font-size': '12pt'
-                }).set_table_styles([
-                    {'selector': 'thead th', 'props': [('background-color', '#f0f0f0'), ('color', '#333'), ('font-weight', 'bold')]},
-                    {'selector': 'tbody tr:hover', 'props': [('background-color', '#e0e0e0')]},
-                ])
-            )
-        else:
-            st.info("No hay clientes registrados.")
+        st.dataframe(df_clientes.style.format({"id": "{:.0f}"}).set_properties(**{'text-align': 'center'}))
+
+        eliminar_id = st.number_input("ID Cliente para eliminar", min_value=0, step=1)
+        if st.button("🗑️ Eliminar Cliente"):
+            if eliminar_id > 0:
+                eliminar_cliente(eliminar_id)
+                st.success(f"Cliente con ID {eliminar_id} eliminado.")
+                st.session_state['refresh'] = True
+            else:
+                st.error("Ingrese un ID válido para eliminar.")
+
     st.divider()
 
 elif menu == "Préstamos":
@@ -345,7 +323,7 @@ elif menu == "Reporte":
             pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
             st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
 
-# Al final del script, fuera de formularios:
-if st.session_state.get('refresh', False):
+# Fuera de la UI para evitar el error
+if st.session_state['refresh']:
     st.session_state['refresh'] = False
     st.experimental_rerun()
