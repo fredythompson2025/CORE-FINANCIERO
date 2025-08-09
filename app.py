@@ -128,7 +128,7 @@ def calcular_cronograma(monto, tasa_anual, plazo_meses, frecuencia, fecha_desemb
     pagos_totales = int(plazo_meses * frecuencia / 12)
     tasa_periodo = tasa_anual / 100 / frecuencia
     if pagos_totales == 0:
-        return pd.DataFrame()  # evitar división por cero
+        return pd.DataFrame()
     if tasa_periodo == 0:
         cuota = monto / pagos_totales
     else:
@@ -335,7 +335,6 @@ elif menu == "Pagos":
                     if monto_pago <= 0:
                         st.error("Monto debe ser mayor a cero.")
                     else:
-                        # Validar que no pague más del saldo pendiente
                         cronograma = calcular_cronograma(
                             df_prestamo['monto'],
                             df_prestamo['tasa'],
@@ -386,7 +385,6 @@ elif menu == "Reporte":
         pagos = obtener_pagos(prestamo_id)
         cron_estado = estado_cuotas(cronograma, pagos)
 
-        # Formato condicional para colores
         def color_estado(row):
             if row['Estado'] == 'Vencida':
                 return ['background-color: #f8d7da'] * len(row)
@@ -398,4 +396,14 @@ elif menu == "Reporte":
             "Fecha": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
             "Cuota": "${:,.2f}",
             "Interes": "${:,.2f}",
-            "Amortizacion": "${:
+            "Amortizacion": "${:,.2f}",
+            "Saldo": "${:,.2f}",
+            "Pagado": "${:,.2f}",
+            "Pendiente": "${:,.2f}",
+            "Estado": "{}"
+        }).apply(color_estado, axis=1).set_properties(**{'text-align': 'center'}))
+
+        st.markdown("---")
+        st.markdown("### Resumen")
+        total_pagado = pagos['monto'].sum() if not pagos.empty else 0.0
+        saldo_pendiente = cron_estado['Pendiente'].sum() if not cron_estado.empty else 0
