@@ -165,13 +165,8 @@ st.divider()
 
 menu = st.sidebar.selectbox("📋 Menú", ["Clientes", "Préstamos", "Pagos", "Reporte"])
 
-if 'msg' not in st.session_state:
-    st.session_state['msg'] = ''
 if 'refresh' not in st.session_state:
     st.session_state['refresh'] = False
-
-def refresh_app():
-    st.session_state['refresh'] = True
 
 if menu == "Clientes":
     st.markdown("## 👥 Clientes")
@@ -186,14 +181,12 @@ if menu == "Clientes":
                 else:
                     agregar_cliente(nombre.strip())
                     st.success(f"Cliente '{nombre.strip()}' agregado.")
-                    refresh_app()
+                    st.session_state['refresh'] = True  # Marcamos para refrescar
+
     with col2:
         st.markdown("### 📋 Clientes registrados")
         df_clientes = obtener_clientes()
         st.dataframe(df_clientes.style.format({"id": "{:.0f}"}).set_properties(**{'text-align': 'center'}))
-    if st.session_state['refresh']:
-        st.session_state['refresh'] = False
-        st.experimental_rerun()
     st.divider()
 
 elif menu == "Préstamos":
@@ -216,7 +209,8 @@ elif menu == "Préstamos":
                     cliente_id = int(df_clientes[df_clientes['nombre']==cliente_sel]['id'].values[0])
                     agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
                     st.success(f"Préstamo creado para {cliente_sel}.")
-                    refresh_app()
+                    st.session_state['refresh'] = True
+
         with col2:
             st.markdown("### 📋 Préstamos existentes")
             df_prestamos = obtener_prestamos()
@@ -228,9 +222,6 @@ elif menu == "Préstamos":
                 "frecuencia": "{:.0f} pagos/año",
                 "fecha_desembolso": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y')
             }).set_properties(**{'text-align': 'center'}))
-    if st.session_state['refresh']:
-        st.session_state['refresh'] = False
-        st.experimental_rerun()
     st.divider()
 
 elif menu == "Pagos":
@@ -255,7 +246,8 @@ elif menu == "Pagos":
                     else:
                         agregar_pago(prestamo_id, fecha_pago, monto_pago)
                         st.success("Pago registrado.")
-                        refresh_app()
+                        st.session_state['refresh'] = True
+
         with col2:
             pagos = obtener_pagos(prestamo_id)
             st.markdown("### 🧾 Pagos registrados")
@@ -265,9 +257,6 @@ elif menu == "Pagos":
                 "fecha_pago": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
                 "monto": "${:,.2f}"
             }).set_properties(**{'text-align': 'center'}))
-    if st.session_state['refresh']:
-        st.session_state['refresh'] = False
-        st.experimental_rerun()
     st.divider()
 
 elif menu == "Reporte":
@@ -303,3 +292,8 @@ elif menu == "Reporte":
         if st.button("📥 Descargar cronograma PDF"):
             pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
             st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
+
+# Al final del script, fuera de formularios:
+if st.session_state.get('refresh', False):
+    st.session_state['refresh'] = False
+    st.experimental_rerun()
