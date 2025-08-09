@@ -10,7 +10,6 @@ from reportlab.lib.styles import getSampleStyleSheet
 
 DB_PATH = "cartera_prestamos.db"
 
-# -- DB helpers --
 def get_conn():
     conn = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
     conn.row_factory = sqlite3.Row
@@ -91,7 +90,6 @@ def obtener_pagos(prestamo_id):
     conn.close()
     return df
 
-# -- Amortización simple francés --
 def calcular_cronograma(monto, tasa_anual, plazo_meses, frecuencia, fecha_desembolso):
     pagos_totales = int(plazo_meses * frecuencia / 12)
     tasa_periodo = tasa_anual / 100 / frecuencia
@@ -133,7 +131,6 @@ def estado_cuotas(cronograma, pagos):
     cronograma['Estado'] = cronograma.apply(lambda r: 'Vencida' if r['Fecha'] < hoy and r['Pendiente'] > 0 else 'Al día', axis=1)
     return cronograma
 
-# -- Exportar PDF --
 def exportar_pdf(df, cliente, prestamo_id):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
@@ -155,8 +152,6 @@ def exportar_pdf(df, cliente, prestamo_id):
     buffer.seek(0)
     return buffer
 
-# -- Streamlit UI --
-
 st.set_page_config("💰 Sistema Préstamos", layout="wide", page_icon="💸")
 init_db()
 
@@ -165,8 +160,11 @@ st.divider()
 
 menu = st.sidebar.selectbox("📋 Menú", ["Clientes", "Préstamos", "Pagos", "Reporte"])
 
-if 'refresh' not in st.session_state:
-    st.session_state['refresh'] = False
+# Estado local para controlar refresco sin rerun
+if 'clientes' not in st.session_state:
+    st.session_state['clientes'] = obtener_clientes()
+if 'prestamos' not in st.session_state:
+    st.session_state['prestamos'] = obtener_prestamos()
 
 if menu == "Clientes":
     st.markdown("## 👥 Clientes")
@@ -181,24 +179,22 @@ if menu == "Clientes":
                 else:
                     agregar_cliente(nombre.strip())
                     st.success(f"Cliente '{nombre.strip()}' agregado.")
-                    st.session_state['refresh'] = True  # Marcamos para refrescar
+                    st.session_state['clientes'] = obtener_clientes()
 
     with col2:
         st.markdown("### 📋 Clientes registrados")
-        df_clientes = obtener_clientes()
-        st.dataframe(df_clientes.style.format({"id": "{:.0f}"}).set_properties(**{'text-align': 'center'}))
+        st.dataframe(st.session_state['clientes'].style.format({"id": "{:.0f}"}).set_properties(**{'text-align': 'center'}))
     st.divider()
 
 elif menu == "Préstamos":
     st.markdown("## 🏦 Préstamos")
-    df_clientes = obtener_clientes()
-    if df_clientes.empty:
+    if st.session_state['clientes'].empty:
         st.info("📌 Agrega primero clientes.")
     else:
         col1, col2 = st.columns([2, 3])
         with col1:
             with st.form("form_prestamo"):
-                cliente_sel = st.selectbox("Cliente", df_clientes['nombre'])
+                cliente_sel = st.selectbox("Cliente", st.session_state['clientes']['nombre'])
                 monto = st.number_input("Monto", min_value=0.0, value=1000.0, step=100.0, format="%.2f")
                 tasa = st.number_input("Tasa anual (%)", min_value=0.0, value=12.0, step=0.1, format="%.2f")
                 plazo = st.number_input("Plazo (meses)", min_value=1, value=12)
@@ -206,15 +202,14 @@ elif menu == "Préstamos":
                 fecha_desembolso = st.date_input("Fecha de desembolso", value=date.today())
                 submitted = st.form_submit_button("🏦 Crear préstamo")
                 if submitted:
-                    cliente_id = int(df_clientes[df_clientes['nombre']==cliente_sel]['id'].values[0])
+                    cliente_id = int(st.session_state['clientes'][st.session_state['clientes']['nombre']==cliente_sel]['id'].values[0])
                     agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
                     st.success(f"Préstamo creado para {cliente_sel}.")
-                    st.session_state['refresh'] = True
+                    st.session_state['prestamos'] = obtener_prestamos()
 
         with col2:
             st.markdown("### 📋 Préstamos existentes")
-            df_prestamos = obtener_prestamos()
-            st.dataframe(df_prestamos.style.format({
+            st.dataframe(st.session_state['prestamos'].style.format({
                 "id": "{:.0f}",
                 "monto": "${:,.2f}",
                 "tasa": "{:.2f}%",
@@ -226,13 +221,12 @@ elif menu == "Préstamos":
 
 elif menu == "Pagos":
     st.markdown("## 💵 Registrar Pagos")
-    df_prestamos = obtener_prestamos()
-    if df_prestamos.empty:
+    if st.session_state['prestamos'].empty:
         st.info("📌 No hay préstamos.")
     else:
-        prestamo_sel = st.selectbox("Selecciona préstamo", df_prestamos['id'].astype(str) + " - " + df_prestamos['cliente'])
+        prestamo_sel = st.selectbox("Selecciona préstamo", st.session_state['prestamos']['id'].astype(str) + " - " + st.session_state['prestamos']['cliente'])
         prestamo_id = int(prestamo_sel.split(" - ")[0])
-        df_prestamo = df_prestamos[df_prestamos['id'] == prestamo_id].iloc[0]
+        df_prestamo = st.session_state['prestamos'][st.session_state['prestamos']['id'] == prestamo_id].iloc[0]
         st.markdown(f"**Préstamo de {df_prestamo['cliente']}** - Monto: ${df_prestamo['monto']:.2f} | Tasa: {df_prestamo['tasa']:.2f}% | Plazo: {df_prestamo['plazo']} meses")
         col1, col2 = st.columns([2, 3])
         with col1:
@@ -246,7 +240,6 @@ elif menu == "Pagos":
                     else:
                         agregar_pago(prestamo_id, fecha_pago, monto_pago)
                         st.success("Pago registrado.")
-                        st.session_state['refresh'] = True
 
         with col2:
             pagos = obtener_pagos(prestamo_id)
@@ -261,13 +254,12 @@ elif menu == "Pagos":
 
 elif menu == "Reporte":
     st.markdown("## 📊 Reporte y Cronograma")
-    df_prestamos = obtener_prestamos()
-    if df_prestamos.empty:
+    if st.session_state['prestamos'].empty:
         st.info("📌 No hay préstamos.")
     else:
-        prestamo_sel = st.selectbox("Selecciona préstamo", df_prestamos['id'].astype(str) + " - " + df_prestamos['cliente'])
+        prestamo_sel = st.selectbox("Selecciona préstamo", st.session_state['prestamos']['id'].astype(str) + " - " + st.session_state['prestamos']['cliente'])
         prestamo_id = int(prestamo_sel.split(" - ")[0])
-        df_prestamo = df_prestamos[df_prestamos['id'] == prestamo_id].iloc[0]
+        df_prestamo = st.session_state['prestamos'][st.session_state['prestamos']['id'] == prestamo_id].iloc[0]
         cronograma = calcular_cronograma(
             df_prestamo['monto'],
             df_prestamo['tasa'],
@@ -292,8 +284,3 @@ elif menu == "Reporte":
         if st.button("📥 Descargar cronograma PDF"):
             pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
             st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
-
-# Al final del script, fuera de formularios:
-if st.session_state.get('refresh', False):
-    st.session_state['refresh'] = False
-    st.experimental_rerun()
