@@ -200,6 +200,11 @@ def exportar_pdf(df, cliente, prestamo_id):
 # ==============================
 # Interfaz Streamlit
 # ==============================
+
+# Inicializamos variable dummy para forzar rerun sin usar experimental_rerun
+if 'dummy' not in st.session_state:
+    st.session_state['dummy'] = False
+
 st.set_page_config("💰 Sistema Préstamos", layout="wide", page_icon="💸")
 init_db()
 
@@ -211,22 +216,18 @@ if 'menu' not in st.session_state:
 
 with st.sidebar:
     st.markdown("## 📋 Menú")
-    menu_cambiado = False
     if st.button("👥 Clientes"):
         st.session_state['menu'] = "Clientes"
-        menu_cambiado = True
-    elif st.button("🏦 Préstamos"):
+        st.session_state['dummy'] = not st.session_state['dummy']  # Forzar rerun
+    if st.button("🏦 Préstamos"):
         st.session_state['menu'] = "Préstamos"
-        menu_cambiado = True
-    elif st.button("💵 Pagos"):
+        st.session_state['dummy'] = not st.session_state['dummy']
+    if st.button("💵 Pagos"):
         st.session_state['menu'] = "Pagos"
-        menu_cambiado = True
-    elif st.button("📊 Reporte"):
+        st.session_state['dummy'] = not st.session_state['dummy']
+    if st.button("📊 Reporte"):
         st.session_state['menu'] = "Reporte"
-        menu_cambiado = True
-
-    if menu_cambiado:
-        st.experimental_rerun()
+        st.session_state['dummy'] = not st.session_state['dummy']
 
 menu = st.session_state['menu']
 
@@ -251,7 +252,7 @@ if menu == "Clientes":
                 else:
                     agregar_cliente(nombre.strip(), identificacion.strip(), direccion.strip(), telefono.strip())
                     st.success(f"Cliente '{nombre.strip()}' agregado.")
-                    st.experimental_rerun()
+                    st.session_state['dummy'] = not st.session_state['dummy']
 
         if not df_clientes.empty:
             with st.form("form_modificar_cliente"):
@@ -266,7 +267,7 @@ if menu == "Clientes":
                 if modificar_submitted:
                     modificar_cliente(cliente_mod['id'], nombre_mod.strip(), identificacion_mod.strip(), direccion_mod.strip(), telefono_mod.strip())
                     st.success(f"Cliente '{nombre_mod.strip()}' modificado.")
-                    st.experimental_rerun()
+                    st.session_state['dummy'] = not st.session_state['dummy']
 
             with st.form("form_eliminar_cliente"):
                 st.markdown("### 🗑️ Eliminar Cliente")
@@ -276,7 +277,7 @@ if menu == "Clientes":
                 if eliminar_submitted:
                     eliminar_cliente(cliente_del['id'])
                     st.success(f"Cliente '{cliente_del_sel}' eliminado.")
-                    st.experimental_rerun()
+                    st.session_state['dummy'] = not st.session_state['dummy']
 
     with col2:
         st.markdown("### 📋 Clientes registrados")
@@ -308,7 +309,7 @@ elif menu == "Préstamos":
                         cliente_id = int(df_clientes[df_clientes['nombre'] == cliente_sel]['id'].values[0])
                         agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
                         st.success(f"Préstamo creado para {cliente_sel}.")
-                        st.experimental_rerun()
+                        st.session_state['dummy'] = not st.session_state['dummy']
 
         with col2:
             df_prestamos = obtener_prestamos()
@@ -347,7 +348,7 @@ elif menu == "Pagos":
                     else:
                         agregar_pago(prestamo_id, fecha_pago, monto_pago)
                         st.success("Pago registrado.")
-                        st.experimental_rerun()
+                        st.session_state['dummy'] = not st.session_state['dummy']
 
         with col2:
             pagos = obtener_pagos(prestamo_id)
