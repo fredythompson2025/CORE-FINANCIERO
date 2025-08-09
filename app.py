@@ -201,7 +201,6 @@ def exportar_pdf(df, cliente, prestamo_id):
 # Interfaz Streamlit
 # ==============================
 
-# Inicializamos variable dummy para forzar rerun sin usar experimental_rerun
 if 'dummy' not in st.session_state:
     st.session_state['dummy'] = False
 
@@ -218,7 +217,7 @@ with st.sidebar:
     st.markdown("## 📋 Menú")
     if st.button("👥 Clientes"):
         st.session_state['menu'] = "Clientes"
-        st.session_state['dummy'] = not st.session_state['dummy']  # Forzar rerun
+        st.session_state['dummy'] = not st.session_state['dummy']
     if st.button("🏦 Préstamos"):
         st.session_state['menu'] = "Préstamos"
         st.session_state['dummy'] = not st.session_state['dummy']
@@ -231,21 +230,23 @@ with st.sidebar:
 
 menu = st.session_state['menu']
 
-# ------------------------------
-# Vista Clientes
-# ------------------------------
+# ==============================
+# Vista Clientes con submenu
+# ==============================
 if menu == "Clientes":
-    st.markdown("## 👥 Clientes")
+    st.markdown("## 👥 Gestión de Clientes")
     df_clientes = obtener_clientes()
-    col1, col2 = st.columns([2, 3])
 
-    with col1:
-        with st.form("form_cliente"):
+    opcion = st.radio("Selecciona una acción:", ["Agregar", "Modificar", "Eliminar", "Buscar"])
+
+    if opcion == "Agregar":
+        st.markdown("### ➕ Agregar Cliente")
+        with st.form("form_cliente_agregar"):
             nombre = st.text_input("Nombre completo", placeholder="Ej: Juan Pérez")
             identificacion = st.text_input("Identificación")
             direccion = st.text_input("Dirección")
             telefono = st.text_input("Teléfono")
-            submitted = st.form_submit_button("➕ Agregar Cliente")
+            submitted = st.form_submit_button("Agregar Cliente")
             if submitted:
                 if nombre.strip() == "":
                     st.error("Debe ingresar un nombre")
@@ -254,34 +255,52 @@ if menu == "Clientes":
                     st.success(f"Cliente '{nombre.strip()}' agregado.")
                     st.session_state['dummy'] = not st.session_state['dummy']
 
-        if not df_clientes.empty:
-            with st.form("form_modificar_cliente"):
-                st.markdown("### ✏️ Modificar Cliente")
+    elif opcion == "Modificar":
+        st.markdown("### ✏️ Modificar Cliente")
+        if df_clientes.empty:
+            st.info("No hay clientes para modificar.")
+        else:
+            with st.form("form_cliente_modificar"):
                 cliente_mod_sel = st.selectbox("Selecciona cliente", df_clientes['nombre'])
                 cliente_mod = df_clientes[df_clientes['nombre'] == cliente_mod_sel].iloc[0]
                 nombre_mod = st.text_input("Nombre", value=cliente_mod['nombre'])
                 identificacion_mod = st.text_input("Identificación", value=cliente_mod['identificacion'])
                 direccion_mod = st.text_input("Dirección", value=cliente_mod['direccion'])
                 telefono_mod = st.text_input("Teléfono", value=cliente_mod['telefono'])
-                modificar_submitted = st.form_submit_button("💾 Modificar Cliente")
+                modificar_submitted = st.form_submit_button("Modificar Cliente")
                 if modificar_submitted:
                     modificar_cliente(cliente_mod['id'], nombre_mod.strip(), identificacion_mod.strip(), direccion_mod.strip(), telefono_mod.strip())
                     st.success(f"Cliente '{nombre_mod.strip()}' modificado.")
                     st.session_state['dummy'] = not st.session_state['dummy']
 
-            with st.form("form_eliminar_cliente"):
-                st.markdown("### 🗑️ Eliminar Cliente")
-                cliente_del_sel = st.selectbox("Selecciona cliente para eliminar", df_clientes['nombre'], key="del_cliente")
+    elif opcion == "Eliminar":
+        st.markdown("### 🗑️ Eliminar Cliente")
+        if df_clientes.empty:
+            st.info("No hay clientes para eliminar.")
+        else:
+            with st.form("form_cliente_eliminar"):
+                cliente_del_sel = st.selectbox("Selecciona cliente para eliminar", df_clientes['nombre'])
                 cliente_del = df_clientes[df_clientes['nombre'] == cliente_del_sel].iloc[0]
-                eliminar_submitted = st.form_submit_button("🗑️ Eliminar Cliente")
+                eliminar_submitted = st.form_submit_button("Eliminar Cliente")
                 if eliminar_submitted:
                     eliminar_cliente(cliente_del['id'])
                     st.success(f"Cliente '{cliente_del_sel}' eliminado.")
                     st.session_state['dummy'] = not st.session_state['dummy']
 
-    with col2:
-        st.markdown("### 📋 Clientes registrados")
-        st.dataframe(df_clientes.style.set_properties(**{'text-align': 'center'}))
+    elif opcion == "Buscar":
+        st.markdown("### 🔍 Buscar Clientes")
+        busqueda = st.text_input("Ingresa nombre o identificación para buscar")
+        if busqueda:
+            df_busqueda = df_clientes[
+                df_clientes['nombre'].str.contains(busqueda, case=False, na=False) |
+                df_clientes['identificacion'].str.contains(busqueda, case=False, na=False)
+            ]
+            if df_busqueda.empty:
+                st.warning("No se encontraron clientes con esa búsqueda.")
+            else:
+                st.dataframe(df_busqueda.style.set_properties(**{'text-align': 'center'}))
+        else:
+            st.info("Ingresa un texto para buscar clientes.")
 
 # ------------------------------
 # Vista Préstamos
@@ -386,12 +405,4 @@ elif menu == "Reporte":
             "Cuota": "${:,.2f}",
             "Interes": "${:,.2f}",
             "Amortizacion": "${:,.2f}",
-            "Saldo": "${:,.2f}",
-            "Pagado": "${:,.2f}",
-            "Pendiente": "${:,.2f}"
-        }).set_properties(**{'text-align': 'center'}))
-
-        st.divider()
-        if st.button("📥 Descargar cronograma PDF"):
-            pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
-            st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
+           
