@@ -12,7 +12,7 @@ DB_PATH = "cartera_prestamos.db"
 
 # -- DB helpers --
 def get_conn():
-    conn = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+    conn = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -109,10 +109,10 @@ def calcular_cronograma(monto, tasa_anual, plazo_meses, frecuencia, fecha_desemb
         cronograma.append({
             "Periodo": i,
             "Fecha": fecha_pago,
-            "Cuota": round(cuota,2),
-            "Interes": round(interes,2),
-            "Amortizacion": round(amortizacion,2),
-            "Saldo": round(saldo,2)
+            "Cuota": round(cuota, 2),
+            "Interes": round(interes, 2),
+            "Amortizacion": round(amortizacion, 2),
+            "Saldo": round(saldo, 2)
         })
     return pd.DataFrame(cronograma)
 
@@ -138,17 +138,20 @@ def exportar_pdf(df, cliente, prestamo_id):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     styles = getSampleStyleSheet()
-    flowables = [Paragraph(f"Cronograma de Pago - Préstamo #{prestamo_id}", styles['Title']),
-                 Paragraph(f"Cliente: {cliente}", styles['Normal']),
-                 Spacer(1,12)]
+    flowables = [
+        Paragraph(f"Cronograma de Pago - Préstamo #{prestamo_id}", styles['Title']),
+        Paragraph(f"Cliente: {cliente}", styles['Normal']),
+        Spacer(1, 12)
+    ]
     data = [df.columns.to_list()]
     for _, row in df.iterrows():
         data.append([str(row[col]) if not pd.isna(row[col]) else '' for col in df.columns])
     table = Table(data, repeatRows=1)
     table.setStyle(TableStyle([
-        ('GRID',(0,0),(-1,-1),0.5,colors.grey),
-        ('BACKGROUND',(0,0),(-1,0),colors.lightgrey),
-        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER')
     ]))
     flowables.append(table)
     doc.build(flowables)
@@ -174,7 +177,8 @@ if menu == "Clientes":
     with col1:
         with st.form("form_cliente"):
             nombre = st.text_input("Nombre completo", placeholder="Ej: Juan Pérez")
-            if st.form_submit_button("➕ Agregar Cliente"):
+            submitted = st.form_submit_button("➕ Agregar Cliente")
+            if submitted:
                 if nombre.strip() == "":
                     st.error("Debe ingresar un nombre")
                 else:
@@ -200,10 +204,11 @@ elif menu == "Préstamos":
                 monto = st.number_input("Monto", min_value=0.0, value=1000.0, step=100.0, format="%.2f")
                 tasa = st.number_input("Tasa anual (%)", min_value=0.0, value=12.0, step=0.1, format="%.2f")
                 plazo = st.number_input("Plazo (meses)", min_value=1, value=12)
-                frecuencia = st.selectbox("Frecuencia de pagos por año", [12,4,2,1], index=0)
+                frecuencia = st.selectbox("Frecuencia de pagos por año", [12, 4, 2, 1], index=0)
                 fecha_desembolso = st.date_input("Fecha de desembolso", value=date.today())
-                if st.form_submit_button("🏦 Crear préstamo"):
-                    cliente_id = int(df_clientes[df_clientes['nombre']==cliente_sel]['id'].values[0])
+                submitted = st.form_submit_button("🏦 Crear préstamo")
+                if submitted:
+                    cliente_id = int(df_clientes[df_clientes['nombre'] == cliente_sel]['id'].values[0])
                     agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
                     st.success(f"Préstamo creado para {cliente_sel}.")
                     st.experimental_rerun()
@@ -235,7 +240,8 @@ elif menu == "Pagos":
             with st.form("form_pago"):
                 fecha_pago = st.date_input("Fecha pago", value=date.today())
                 monto_pago = st.number_input("Monto pago", min_value=0.0, value=0.0, step=10.0, format="%.2f")
-                if st.form_submit_button("💾 Registrar pago"):
+                submitted = st.form_submit_button("💾 Registrar pago")
+                if submitted:
                     if monto_pago <= 0:
                         st.error("Monto debe ser mayor a cero")
                     else:
@@ -286,4 +292,3 @@ elif menu == "Reporte":
         if st.button("📥 Descargar cronograma PDF"):
             pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
             st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
-
