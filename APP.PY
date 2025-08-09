@@ -254,8 +254,11 @@ elif menu == "Reporte":
         pagos = obtener_pagos(prestamo_id)
         cron_estado = estado_cuotas(cronograma, pagos)
         st.dataframe(cron_estado)
-        if st.button("Descargar cronograma PDF"):
+        if st.button("Generar cronograma PDF"):
             pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
-            st.download_button("Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
-
-
+            st.download_button(
+                label="Descargar PDF",
+                data=pdf_bytes.getvalue(),
+                file_name=f"Cronograma_{prestamo_id}.pdf",
+                mime="application/pdf"
+            )
