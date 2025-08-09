@@ -75,7 +75,7 @@ def eliminar_cliente(id_cliente):
     cur = conn.cursor()
     # Borrar pagos relacionados
     cur.execute("DELETE FROM pagos WHERE prestamo_id IN (SELECT id FROM prestamos WHERE cliente_id = ?)", (id_cliente,))
-    # Borrar prestamos relacionados
+    # Borrar préstamos relacionados
     cur.execute("DELETE FROM prestamos WHERE cliente_id = ?", (id_cliente,))
     # Borrar cliente
     cur.execute("DELETE FROM clientes WHERE id=?", (id_cliente,))
@@ -211,39 +211,35 @@ st.divider()
 
 if 'menu' not in st.session_state:
     st.session_state['menu'] = "Clientes"
-if 'reload' not in st.session_state:
-    st.session_state['reload'] = False
 
 with st.sidebar:
     st.markdown("## 📋 Menú")
     if st.button("👥 Clientes"):
         st.session_state['menu'] = "Clientes"
-        st.session_state['reload'] = not st.session_state['reload']
     if st.button("🏦 Préstamos"):
         st.session_state['menu'] = "Préstamos"
-        st.session_state['reload'] = not st.session_state['reload']
     if st.button("💵 Pagos"):
         st.session_state['menu'] = "Pagos"
-        st.session_state['reload'] = not st.session_state['reload']
     if st.button("📊 Reporte"):
         st.session_state['menu'] = "Reporte"
-        st.session_state['reload'] = not st.session_state['reload']
 
 menu = st.session_state['menu']
 
 # ------------------------------
-# Vista Clientes con submenu horizontal
+# Vista Clientes con pestañas
 # ------------------------------
 if menu == "Clientes":
     st.markdown("## 👥 Clientes")
 
+    # Crear pestañas horizontales
     tabs = st.tabs(["Agregar", "Modificar", "Eliminar", "Buscar"])
 
+    # -- Datos actuales (se refrescan cada vez)
     df_clientes = obtener_clientes()
 
-    # --- Agregar ---
+    # Agregar cliente
     with tabs[0]:
-        with st.form("form_cliente_agregar"):
+        with st.form("form_agregar_cliente"):
             nombre = st.text_input("Nombre completo", placeholder="Ej: Juan Pérez")
             identificacion = st.text_input("Identificación")
             direccion = st.text_input("Dirección")
@@ -255,14 +251,13 @@ if menu == "Clientes":
                 else:
                     agregar_cliente(nombre.strip(), identificacion.strip(), direccion.strip(), telefono.strip())
                     st.success(f"Cliente '{nombre.strip()}' agregado.")
-                    st.experimental_rerun()
 
-    # --- Modificar ---
+    # Modificar cliente
     with tabs[1]:
         if df_clientes.empty:
             st.info("No hay clientes para modificar.")
         else:
-            with st.form("form_cliente_modificar"):
+            with st.form("form_modificar_cliente"):
                 cliente_mod_sel = st.selectbox("Selecciona cliente", df_clientes['nombre'])
                 cliente_mod = df_clientes[df_clientes['nombre'] == cliente_mod_sel].iloc[0]
                 nombre_mod = st.text_input("Nombre", value=cliente_mod['nombre'])
@@ -273,30 +268,28 @@ if menu == "Clientes":
                 if modificar_submitted:
                     modificar_cliente(cliente_mod['id'], nombre_mod.strip(), identificacion_mod.strip(), direccion_mod.strip(), telefono_mod.strip())
                     st.success(f"Cliente '{nombre_mod.strip()}' modificado.")
-                    st.experimental_rerun()
 
-    # --- Eliminar ---
+    # Eliminar cliente
     with tabs[2]:
         if df_clientes.empty:
             st.info("No hay clientes para eliminar.")
         else:
-            with st.form("form_cliente_eliminar"):
+            with st.form("form_eliminar_cliente"):
                 cliente_del_sel = st.selectbox("Selecciona cliente para eliminar", df_clientes['nombre'], key="del_cliente")
                 cliente_del = df_clientes[df_clientes['nombre'] == cliente_del_sel].iloc[0]
                 eliminar_submitted = st.form_submit_button("🗑️ Eliminar Cliente")
                 if eliminar_submitted:
                     eliminar_cliente(cliente_del['id'])
                     st.success(f"Cliente '{cliente_del_sel}' eliminado.")
-                    st.experimental_rerun()
 
-    # --- Buscar ---
+    # Buscar cliente - reporte actualizado
     with tabs[3]:
+        st.markdown("### 📋 Reporte de Clientes")
+        df_clientes = obtener_clientes()  # refrescar datos
         if df_clientes.empty:
             st.info("No hay clientes registrados.")
         else:
-            st.markdown("### 📋 Clientes registrados")
-            df_clientes_actual = obtener_clientes()
-            st.dataframe(df_clientes_actual.style.set_properties(**{'text-align': 'center'}))
+            st.dataframe(df_clientes.style.set_properties(**{'text-align': 'center'}))
 
 # ------------------------------
 # Vista Préstamos
@@ -324,7 +317,6 @@ elif menu == "Préstamos":
                         cliente_id = int(df_clientes[df_clientes['nombre'] == cliente_sel]['id'].values[0])
                         agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
                         st.success(f"Préstamo creado para {cliente_sel}.")
-                        st.experimental_rerun()
 
         with col2:
             df_prestamos = obtener_prestamos()
@@ -363,7 +355,6 @@ elif menu == "Pagos":
                     else:
                         agregar_pago(prestamo_id, fecha_pago, monto_pago)
                         st.success("Pago registrado.")
-                        st.experimental_rerun()
 
         with col2:
             pagos = obtener_pagos(prestamo_id)
