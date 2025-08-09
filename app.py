@@ -52,10 +52,8 @@ def init_db():
 def agregar_cliente(nombre, identificacion, direccion, telefono):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("""
-        INSERT OR IGNORE INTO clientes (nombre, identificacion, direccion, telefono)
-        VALUES (?, ?, ?, ?)
-    """, (nombre, identificacion, direccion, telefono))
+    cur.execute("INSERT OR IGNORE INTO clientes (nombre, identificacion, direccion, telefono) VALUES (?,?,?,?)",
+                (nombre, identificacion, direccion, telefono))
     conn.commit()
     conn.close()
 
@@ -186,66 +184,76 @@ init_db()
 st.markdown("<h1 style='text-align:center; color: darkblue;'>💰 Sistema de Gestión de Préstamos</h1>", unsafe_allow_html=True)
 st.divider()
 
-menu = st.sidebar.selectbox("📋 Menú", ["Clientes", "Préstamos", "Pagos", "Reporte"])
+# Menú con botones en la sidebar
+if 'menu' not in st.session_state:
+    st.session_state['menu'] = "Clientes"
+
+with st.sidebar:
+    st.markdown("## 📋 Menú")
+    if st.button("👥 Clientes"):
+        st.session_state['menu'] = "Clientes"
+    if st.button("🏦 Préstamos"):
+        st.session_state['menu'] = "Préstamos"
+    if st.button("💵 Pagos"):
+        st.session_state['menu'] = "Pagos"
+    if st.button("📊 Reporte"):
+        st.session_state['menu'] = "Reporte"
+
+menu = st.session_state['menu']
 
 if 'refresh' not in st.session_state:
     st.session_state['refresh'] = False
 
 if menu == "Clientes":
-    st.markdown("## 👥 Gestión de Clientes")
-
-    # Agregar cliente
-    with st.expander("➕ Agregar Cliente", expanded=True):
-        with st.form("form_agregar_cliente"):
-            nombre = st.text_input("Nombre completo")
+    st.markdown("## 👥 Clientes")
+    col1, col2 = st.columns([2, 3])
+    with col1:
+        with st.form("form_cliente"):
+            nombre = st.text_input("Nombre completo", placeholder="Ej: Juan Pérez")
             identificacion = st.text_input("Identificación")
             direccion = st.text_input("Dirección")
             telefono = st.text_input("Teléfono")
-            submitted = st.form_submit_button("Agregar Cliente")
+            submitted = st.form_submit_button("➕ Agregar Cliente")
             if submitted:
                 if nombre.strip() == "":
-                    st.error("El nombre es obligatorio")
+                    st.error("Debe ingresar un nombre")
                 else:
                     agregar_cliente(nombre.strip(), identificacion.strip(), direccion.strip(), telefono.strip())
-                    st.success(f"Cliente '{nombre.strip()}' agregado correctamente.")
+                    st.success(f"Cliente '{nombre.strip()}' agregado.")
                     st.session_state['refresh'] = True
 
-    df_clientes = obtener_clientes()
-    if df_clientes.empty:
-        st.info("No hay clientes registrados.")
-    else:
-        st.markdown("### Clientes registrados")
-        st.dataframe(df_clientes.style.set_properties(**{'text-align': 'center'}))
-
-        # Modificar cliente
-        with st.expander("✏️ Modificar Cliente"):
-            id_mod = st.selectbox("Selecciona cliente a modificar", df_clientes['id'].astype(str) + " - " + df_clientes['nombre'])
-            id_mod_val = int(id_mod.split(" - ")[0])
-            cliente_mod = df_clientes[df_clientes['id'] == id_mod_val].iloc[0]
-
-            with st.form("form_modificar_cliente"):
-                nombre_mod = st.text_input("Nombre completo", value=cliente_mod['nombre'])
-                identificacion_mod = st.text_input("Identificación", value=cliente_mod['identificacion'] or "")
-                direccion_mod = st.text_input("Dirección", value=cliente_mod['direccion'] or "")
-                telefono_mod = st.text_input("Teléfono", value=cliente_mod['telefono'] or "")
-                submitted_mod = st.form_submit_button("Modificar Cliente")
-                if submitted_mod:
-                    if nombre_mod.strip() == "":
-                        st.error("El nombre es obligatorio")
-                    else:
-                        modificar_cliente(id_mod_val, nombre_mod.strip(), identificacion_mod.strip(), direccion_mod.strip(), telefono_mod.strip())
-                        st.success(f"Cliente '{nombre_mod.strip()}' modificado correctamente.")
-                        st.session_state['refresh'] = True
-
-        # Eliminar cliente
-        with st.expander("🗑️ Eliminar Cliente"):
-            id_del = st.selectbox("Selecciona cliente a eliminar", df_clientes['id'].astype(str) + " - " + df_clientes['nombre'])
-            id_del_val = int(id_del.split(" - ")[0])
-            nombre_del = df_clientes[df_clientes['id'] == id_del_val]['nombre'].values[0]
-            if st.button(f"Eliminar cliente '{nombre_del}'"):
-                eliminar_cliente(id_del_val)
-                st.success(f"Cliente '{nombre_del}' eliminado correctamente.")
+        with st.form("form_modificar_cliente"):
+            st.markdown("### ✏️ Modificar Cliente")
+            df_clientes_mod = obtener_clientes()
+            cliente_mod_sel = st.selectbox("Selecciona cliente para modificar", df_clientes_mod['nombre'])
+            cliente_mod = df_clientes_mod[df_clientes_mod['nombre'] == cliente_mod_sel].iloc[0]
+            nombre_mod = st.text_input("Nombre", value=cliente_mod['nombre'], key="mod_nombre")
+            identificacion_mod = st.text_input("Identificación", value=cliente_mod['identificacion'], key="mod_ident")
+            direccion_mod = st.text_input("Dirección", value=cliente_mod['direccion'], key="mod_dir")
+            telefono_mod = st.text_input("Teléfono", value=cliente_mod['telefono'], key="mod_tel")
+            modificar_submitted = st.form_submit_button("💾 Modificar Cliente")
+            if modificar_submitted:
+                modificar_cliente(cliente_mod['id'], nombre_mod.strip(), identificacion_mod.strip(), direccion_mod.strip(), telefono_mod.strip())
+                st.success(f"Cliente '{nombre_mod.strip()}' modificado.")
                 st.session_state['refresh'] = True
+
+        with st.form("form_eliminar_cliente"):
+            st.markdown("### 🗑️ Eliminar Cliente")
+            df_clientes_del = obtener_clientes()
+            cliente_del_sel = st.selectbox("Selecciona cliente para eliminar", df_clientes_del['nombre'], key="del_cliente")
+            cliente_del = df_clientes_del[df_clientes_del['nombre'] == cliente_del_sel].iloc[0]
+            eliminar_submitted = st.form_submit_button("🗑️ Eliminar Cliente")
+            if eliminar_submitted:
+                eliminar_cliente(cliente_del['id'])
+                st.success(f"Cliente '{cliente_del_sel}' eliminado.")
+                st.session_state['refresh'] = True
+
+    with col2:
+        st.markdown("### 📋 Clientes registrados")
+        df_clientes = obtener_clientes()
+        st.dataframe(df_clientes.style.format({"id": "{:.0f}"}).set_properties(**{'text-align': 'center'}))
+
+    st.divider()
 
 elif menu == "Préstamos":
     st.markdown("## 🏦 Préstamos")
@@ -280,6 +288,7 @@ elif menu == "Préstamos":
                 "frecuencia": "{:.0f} pagos/año",
                 "fecha_desembolso": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y')
             }).set_properties(**{'text-align': 'center'}))
+    st.divider()
 
 elif menu == "Pagos":
     st.markdown("## 💵 Registrar Pagos")
@@ -314,6 +323,7 @@ elif menu == "Pagos":
                 "fecha_pago": lambda d: pd.to_datetime(d).strftime('%d-%m-%Y'),
                 "monto": "${:,.2f}"
             }).set_properties(**{'text-align': 'center'}))
+    st.divider()
 
 elif menu == "Reporte":
     st.markdown("## 📊 Reporte y Cronograma")
@@ -349,7 +359,7 @@ elif menu == "Reporte":
             pdf_bytes = exportar_pdf(cron_estado, df_prestamo['cliente'], prestamo_id)
             st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"Cronograma_{prestamo_id}.pdf", mime="application/pdf")
 
-# Refrescar app si se indicó
+# Refrescar si necesario
 if st.session_state.get('refresh', False):
     st.session_state['refresh'] = False
     st.experimental_rerun()
