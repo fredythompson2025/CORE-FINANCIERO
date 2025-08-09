@@ -244,7 +244,8 @@ if menu == "Clientes":
                 else:
                     agregar_cliente(nombre.strip(), identificacion.strip(), direccion.strip(), telefono.strip())
                     st.success(f"Cliente '{nombre.strip()}' agregado.")
-                    st.experimental_set_query_params()  # Para evitar volver a enviar el form
+                    # Limpiar query params para evitar reenvío del formulario
+                    st.query_params = {}
 
     elif submenu == "Modificar":
         if df_clientes.empty:
@@ -261,7 +262,7 @@ if menu == "Clientes":
                 if modificar_submitted:
                     modificar_cliente(cliente_mod['id'], nombre_mod.strip(), identificacion_mod.strip(), direccion_mod.strip(), telefono_mod.strip())
                     st.success(f"Cliente '{nombre_mod.strip()}' modificado.")
-                    st.experimental_set_query_params()
+                    st.query_params = {}
 
     elif submenu == "Eliminar":
         if df_clientes.empty:
@@ -273,7 +274,7 @@ if menu == "Clientes":
                 cliente_del = df_clientes[df_clientes['nombre'] == cliente_del_sel].iloc[0]
                 eliminar_cliente(cliente_del['id'])
                 st.success(f"Cliente '{cliente_del_sel}' eliminado.")
-                st.experimental_set_query_params()
+                st.query_params = {}
 
     elif submenu == "Buscar":
         if df_clientes.empty:
