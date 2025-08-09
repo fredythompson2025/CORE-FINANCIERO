@@ -385,7 +385,7 @@ elif menu == "Reporte":
         prestamo_sel = st.selectbox("Selecciona préstamo", df_prestamos['id'].astype(str) + " - " + df_prestamos['cliente'])
         prestamo_id = int(prestamo_sel.split(" - ")[0])
         df_prestamo = df_prestamos[df_prestamos['id'] == prestamo_id].iloc[0]
-        cronograma = calcular_cronograma(
+        cronograma = calcular_cronograma
             df_prestamo['monto'],
             df_prestamo['tasa'],
             df_prestamo['plazo'],
