@@ -256,70 +256,122 @@ with st.sidebar:
 menu = st.session_state['menu']
 
 if menu == "Clientes":
-    st.markdown("## 👥 Clientes")
-    col1, col2 = st.columns([2, 3])
+    st.markdown("## 👥 Gestión de Clientes")
     
-    with col1:
+    # Pestañas para las diferentes acciones
+    tab1, tab2, tab3 = st.tabs(["➕ Agregar Cliente", "✏️ Modificar Cliente", "🗑️ Eliminar Cliente"])
+    
+    # Obtener clientes una sola vez para usar en todas las pestañas
+    df_clientes = obtener_clientes()
+    
+    with tab1:
+        st.markdown("### ➕ Agregar Nuevo Cliente")
         with st.form("form_cliente"):
-            st.markdown("### ➕ Agregar Cliente")
-            nombre = st.text_input("Nombre completo", placeholder="Ej: Juan Pérez")
-            identificacion = st.text_input("Identificación")
-            direccion = st.text_input("Dirección")
-            telefono = st.text_input("Teléfono")
-            submitted = st.form_submit_button("➕ Agregar Cliente")
+            col1, col2 = st.columns(2)
+            with col1:
+                nombre = st.text_input("Nombre completo", placeholder="Ej: Juan Pérez")
+                identificacion = st.text_input("Identificación", placeholder="Ej: 12345678")
+            with col2:
+                direccion = st.text_input("Dirección", placeholder="Ej: Calle 123 #45-67")
+                telefono = st.text_input("Teléfono", placeholder="Ej: +57 300 123 4567")
+            
+            submitted = st.form_submit_button("➕ Agregar Cliente", use_container_width=True)
             
             if submitted:
                 if nombre.strip() == "":
                     st.error("Debe ingresar un nombre")
                 else:
                     if agregar_cliente(nombre.strip(), identificacion.strip(), direccion.strip(), telefono.strip()):
-                        st.success(f"Cliente '{nombre.strip()}' agregado.")
+                        st.success(f"Cliente '{nombre.strip()}' agregado exitosamente.")
                         st.rerun()
                     else:
                         st.error("Error: Ya existe un cliente con ese nombre.")
 
-        df_clientes_actions = obtener_clientes()
-        if not df_clientes_actions.empty:
+    with tab2:
+        st.markdown("### ✏️ Modificar Cliente Existente")
+        if df_clientes.empty:
+            st.info("No hay clientes registrados para modificar. Agrega clientes primero.")
+        else:
             with st.form("form_modificar_cliente"):
-                st.markdown("### ✏️ Modificar Cliente")
-                cliente_mod_sel = st.selectbox("Selecciona cliente para modificar", df_clientes_actions['nombre'])
-                cliente_mod = df_clientes_actions[df_clientes_actions['nombre'] == cliente_mod_sel].iloc[0]
-                nombre_mod = st.text_input("Nombre", value=cliente_mod['nombre'], key="mod_nombre")
-                identificacion_mod = st.text_input("Identificación", value=str(cliente_mod['identificacion'] or ""), key="mod_ident")
-                direccion_mod = st.text_input("Dirección", value=str(cliente_mod['direccion'] or ""), key="mod_dir")
-                telefono_mod = st.text_input("Teléfono", value=str(cliente_mod['telefono'] or ""), key="mod_tel")
-                modificar_submitted = st.form_submit_button("💾 Modificar Cliente")
+                cliente_mod_sel = st.selectbox("Selecciona el cliente a modificar", df_clientes['nombre'])
+                cliente_mod = df_clientes[df_clientes['nombre'] == cliente_mod_sel].iloc[0]
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    nombre_mod = st.text_input("Nombre", value=cliente_mod['nombre'], key="mod_nombre")
+                    identificacion_mod = st.text_input("Identificación", value=str(cliente_mod['identificacion'] or ""), key="mod_ident")
+                with col2:
+                    direccion_mod = st.text_input("Dirección", value=str(cliente_mod['direccion'] or ""), key="mod_dir")
+                    telefono_mod = st.text_input("Teléfono", value=str(cliente_mod['telefono'] or ""), key="mod_tel")
+                
+                modificar_submitted = st.form_submit_button("💾 Guardar Cambios", use_container_width=True)
                 
                 if modificar_submitted:
                     identificacion_str = identificacion_mod.strip() if identificacion_mod and identificacion_mod.strip() else ""
                     direccion_str = direccion_mod.strip() if direccion_mod and direccion_mod.strip() else ""
                     telefono_str = telefono_mod.strip() if telefono_mod and telefono_mod.strip() else ""
                     modificar_cliente(cliente_mod['id'], nombre_mod.strip(), identificacion_str, direccion_str, telefono_str)
-                    st.success(f"Cliente '{nombre_mod.strip()}' modificado.")
+                    st.success(f"Cliente '{nombre_mod.strip()}' modificado exitosamente.")
                     st.rerun()
 
+    with tab3:
+        st.markdown("### 🗑️ Eliminar Cliente")
+        if df_clientes.empty:
+            st.info("No hay clientes registrados para eliminar.")
+        else:
             with st.form("form_eliminar_cliente"):
-                st.markdown("### 🗑️ Eliminar Cliente")
-                cliente_del_sel = st.selectbox("Selecciona cliente para eliminar", df_clientes_actions['nombre'], key="del_cliente")
-                cliente_del = df_clientes_actions[df_clientes_actions['nombre'] == cliente_del_sel].iloc[0]
-                eliminar_submitted = st.form_submit_button("🗑️ Eliminar Cliente", type="secondary")
+                cliente_del_sel = st.selectbox("Selecciona el cliente a eliminar", df_clientes['nombre'], key="del_cliente")
+                cliente_del = df_clientes[df_clientes['nombre'] == cliente_del_sel].iloc[0]
+                
+                st.warning(f"⚠️ Esta acción eliminará permanentemente al cliente: **{cliente_del_sel}**")
+                st.write("**Información del cliente:**")
+                st.write(f"- **ID:** {cliente_del['id']}")
+                st.write(f"- **Identificación:** {cliente_del['identificacion'] or 'No especificada'}")
+                st.write(f"- **Dirección:** {cliente_del['direccion'] or 'No especificada'}")
+                st.write(f"- **Teléfono:** {cliente_del['telefono'] or 'No especificado'}")
+                
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col2:
+                    eliminar_submitted = st.form_submit_button("🗑️ Confirmar Eliminación", type="secondary", use_container_width=True)
                 
                 if eliminar_submitted:
                     eliminar_cliente(cliente_del['id'])
-                    st.success(f"Cliente '{cliente_del_sel}' eliminado.")
+                    st.success(f"Cliente '{cliente_del_sel}' eliminado exitosamente.")
                     st.rerun()
-
-    with col2:
-        st.markdown("### 📋 Clientes registrados")
-        df_clientes = obtener_clientes()
+    
+    # Mostrar tabla de clientes registrados
+    st.divider()
+    st.markdown("### 📋 Lista de Clientes Registrados")
+    
+    if df_clientes.empty:
+        st.info("No hay clientes registrados. Usa la pestaña 'Agregar Cliente' para comenzar.")
+    else:
+        # Mostrar estadísticas
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Clientes", len(df_clientes))
+        with col2:
+            clientes_con_identificacion = len(df_clientes[df_clientes['identificacion'].notna() & (df_clientes['identificacion'] != "")])
+            st.metric("Con Identificación", clientes_con_identificacion)
+        with col3:
+            clientes_con_telefono = len(df_clientes[df_clientes['telefono'].notna() & (df_clientes['telefono'] != "")])
+            st.metric("Con Teléfono", clientes_con_telefono)
+        with col4:
+            clientes_con_direccion = len(df_clientes[df_clientes['direccion'].notna() & (df_clientes['direccion'] != "")])
+            st.metric("Con Dirección", clientes_con_direccion)
         
-        if df_clientes.empty:
-            st.info("No hay clientes registrados. Agrega el primer cliente usando el formulario de la izquierda.")
-        else:
-            st.dataframe(
-                df_clientes,
-                use_container_width=True
-            )
+        # Tabla de clientes
+        st.dataframe(
+            df_clientes,
+            use_container_width=True,
+            column_config={
+                "id": "ID",
+                "nombre": "Nombre Completo",
+                "identificacion": "Identificación",
+                "direccion": "Dirección",
+                "telefono": "Teléfono"
+            }
+        )
 
 elif menu == "Préstamos":
     st.markdown("## 🏦 Préstamos")
