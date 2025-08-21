@@ -190,9 +190,9 @@ def estado_cuotas(cronograma, pagos):
             break
     
     cronograma['Pendiente'] = cronograma['Cuota'] - cronograma['Pagado']
-    hoy = pd.Timestamp(date.today())
+    hoy = date.today()
     cronograma['Estado'] = cronograma.apply(
-        lambda r: 'Vencida' if r['Fecha'] < hoy and r['Pendiente'] > 0 else 'Al día', 
+        lambda r: 'Vencida' if r['Fecha'].date() < hoy and r['Pendiente'] > 0 else 'Al día', 
         axis=1
     )
     
