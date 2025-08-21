@@ -139,6 +139,33 @@ def obtener_todos_pagos():
     conn.close()
     return df
 
+def obtener_resumen_todos_clientes():
+    """
+    Obtiene un resumen completo de todos los clientes con sus préstamos, pagos y estado de mora
+    """
+    conn = get_conn()
+    df = pd.read_sql_query("""
+    SELECT 
+        c.id as cliente_id,
+        c.nombre as cliente,
+        c.identificacion,
+        c.telefono,
+        p.id as prestamo_id,
+        p.monto as monto_prestamo,
+        p.tasa,
+        p.plazo,
+        p.frecuencia,
+        p.fecha_desembolso,
+        COALESCE(SUM(pag.monto), 0) as total_pagado
+    FROM clientes c
+    LEFT JOIN prestamos p ON c.id = p.cliente_id
+    LEFT JOIN pagos pag ON p.id = pag.prestamo_id
+    GROUP BY c.id, c.nombre, c.identificacion, c.telefono, p.id, p.monto, p.tasa, p.plazo, p.frecuencia, p.fecha_desembolso
+    ORDER BY c.nombre, p.id
+    """, conn)
+    conn.close()
+    return df
+
 # -- Amortización simple francés --
 def calcular_cronograma(monto, tasa_anual, plazo_meses, frecuencia, fecha_desembolso):
     """
@@ -191,10 +218,14 @@ def estado_cuotas(cronograma, pagos):
     
     cronograma['Pendiente'] = cronograma['Cuota'] - cronograma['Pagado']
     hoy = date.today()
-    cronograma['Estado'] = cronograma.apply(
-        lambda r: 'Vencida' if r['Fecha'].date() < hoy and r['Pendiente'] > 0 else 'Al día', 
-        axis=1
-    )
+    
+    def determinar_estado(row):
+        fecha_vencimiento = row['Fecha']
+        if isinstance(fecha_vencimiento, pd.Timestamp):
+            fecha_vencimiento = fecha_vencimiento.date()
+        return 'Vencida' if fecha_vencimiento < hoy and row['Pendiente'] > 0 else 'Al día'
+    
+    cronograma['Estado'] = cronograma.apply(determinar_estado, axis=1)
     
     return cronograma
 
@@ -484,121 +515,257 @@ elif menu == "Pagos":
                 )
 
 elif menu == "Reporte":
-    st.markdown("## 📊 Reportes y Cronogramas")
-    df_prestamos = obtener_prestamos()
+    st.markdown("## 📊 Reportes y Estado de Cartera")
     
-    if df_prestamos.empty:
-        st.info("📌 No hay préstamos para generar reportes. Crea préstamos primero.")
-    else:
-        # Selector de préstamo
-        prestamo_options = [f"#{row['id']} - {row['cliente']} (${row['monto']:,.2f})" 
-                          for _, row in df_prestamos.iterrows()]
-        prestamo_sel = st.selectbox("Selecciona un préstamo para ver su cronograma", prestamo_options)
-        prestamo_id = int(prestamo_sel.split('#')[1].split(' - ')[0])
+    # Pestañas para diferentes tipos de reportes
+    tab1, tab2 = st.tabs(["📋 Resumen General", "📅 Cronograma Individual"])
+    
+    with tab1:
+        st.markdown("### 📋 Resumen de Todos los Clientes")
         
-        # Obtener detalles del préstamo
-        df_prestamo_detalle = obtener_prestamo_detalle(prestamo_id)
-        if not df_prestamo_detalle.empty:
-            prestamo = df_prestamo_detalle.iloc[0]
+        df_resumen = obtener_resumen_todos_clientes()
+        
+        if df_resumen.empty:
+            st.info("📌 No hay préstamos registrados para generar reportes.")
+        else:
+            # Calcular resumen general
+            resumen_general = []
             
-            # Mostrar información del préstamo
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Cliente", prestamo['cliente_nombre'])
-            with col2:
-                st.metric("Monto", f"${prestamo['monto']:,.2f}")
-            with col3:
-                st.metric("Tasa Anual", f"{prestamo['tasa']}%")
-            with col4:
-                st.metric("Plazo", f"{prestamo['plazo']} meses")
-            
-            st.divider()
-            
-            # Calcular cronograma
-            cronograma = calcular_cronograma(
-                prestamo['monto'], 
-                prestamo['tasa'], 
-                prestamo['plazo'], 
-                prestamo['frecuencia'],
-                prestamo['fecha_desembolso']
-            )
-            
-            # Obtener pagos realizados
-            pagos_realizados = obtener_pagos(prestamo_id)
-            
-            # Calcular estado de cuotas
-            cronograma_con_estado = estado_cuotas(cronograma, pagos_realizados)
-            
-            # Mostrar estadísticas
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                cuotas_pagadas = len(cronograma_con_estado[cronograma_con_estado['Pendiente'] == 0])
-                st.metric("Cuotas Pagadas", cuotas_pagadas)
-            with col2:
-                cuotas_vencidas = len(cronograma_con_estado[cronograma_con_estado['Estado'] == 'Vencida'])
-                st.metric("Cuotas Vencidas", cuotas_vencidas)
-            with col3:
-                total_pagado = pagos_realizados['monto'].sum() if not pagos_realizados.empty else 0
-                st.metric("Total Pagado", f"${total_pagado:,.2f}")
-            with col4:
-                saldo_pendiente = cronograma_con_estado['Pendiente'].sum()
-                st.metric("Saldo Pendiente", f"${saldo_pendiente:,.2f}")
-            
-            st.divider()
-            
-            # Mostrar cronograma con estado
-            st.markdown("### 📅 Cronograma de Pagos")
-            
-            # Aplicar colores según el estado
-            def color_estado(val):
-                if val == 'Vencida':
-                    return 'background-color: #ffcccc'
-                elif val == 'Al día':
-                    return 'background-color: #ccffcc'
-                return ''
-            
-            df_display_cronograma = cronograma_con_estado.copy()
-            df_display_cronograma['Cuota'] = df_display_cronograma['Cuota'].apply(lambda x: f"${x:,.2f}")
-            df_display_cronograma['Interes'] = df_display_cronograma['Interes'].apply(lambda x: f"${x:,.2f}")
-            df_display_cronograma['Amortizacion'] = df_display_cronograma['Amortizacion'].apply(lambda x: f"${x:,.2f}")
-            df_display_cronograma['Saldo'] = df_display_cronograma['Saldo'].apply(lambda x: f"${x:,.2f}")
-            df_display_cronograma['Pagado'] = df_display_cronograma['Pagado'].apply(lambda x: f"${x:,.2f}")
-            df_display_cronograma['Pendiente'] = df_display_cronograma['Pendiente'].apply(lambda x: f"${x:,.2f}")
-            
-            # Mostrar tabla con estilos
-            styled_df = df_display_cronograma.style.applymap(color_estado, subset=['Estado'])
-            st.dataframe(styled_df, use_container_width=True)
-            
-            # Botón para exportar PDF
-            st.divider()
-            col1, col2, col3 = st.columns([1, 1, 1])
-            with col2:
-                if st.button("📄 Exportar Cronograma a PDF", use_container_width=True):
-                    pdf_buffer = exportar_pdf(cronograma_con_estado, prestamo['cliente_nombre'], prestamo_id)
-                    st.download_button(
-                        label="⬇️ Descargar PDF",
-                        data=pdf_buffer.getvalue(),
-                        file_name=f"cronograma_prestamo_{prestamo_id}.pdf",
-                        mime="application/pdf",
-                        use_container_width=True
+            for _, row in df_resumen.iterrows():
+                if pd.notna(row['prestamo_id']):  # Solo si tiene préstamos
+                    # Calcular cronograma para este préstamo
+                    cronograma = calcular_cronograma(
+                        row['monto_prestamo'], 
+                        row['tasa'], 
+                        row['plazo'], 
+                        row['frecuencia'],
+                        row['fecha_desembolso']
                     )
+                    
+                    # Obtener pagos para este préstamo
+                    pagos = obtener_pagos(row['prestamo_id'])
+                    
+                    # Calcular estado
+                    cronograma_con_estado = estado_cuotas(cronograma, pagos)
+                    
+                    # Calcular métricas
+                    total_prestamo = row['monto_prestamo']
+                    total_pagado = row['total_pagado']
+                    saldo_pendiente = cronograma_con_estado['Pendiente'].sum()
+                    cuotas_vencidas = len(cronograma_con_estado[cronograma_con_estado['Estado'] == 'Vencida'])
+                    total_cuotas = len(cronograma_con_estado)
+                    cuotas_pagadas = len(cronograma_con_estado[cronograma_con_estado['Pendiente'] == 0])
+                    
+                    # Determinar estado de mora
+                    estado_mora = "En Mora" if cuotas_vencidas > 0 else "Al Día"
+                    
+                    resumen_general.append({
+                        'Cliente': row['cliente'],
+                        'Identificación': row['identificacion'] or 'No especificada',
+                        'Teléfono': row['telefono'] or 'No especificado',
+                        'Préstamo ID': row['prestamo_id'],
+                        'Monto Prestado': total_prestamo,
+                        'Total Pagado': total_pagado,
+                        'Saldo Pendiente': saldo_pendiente,
+                        'Cuotas Pagadas': f"{cuotas_pagadas}/{total_cuotas}",
+                        'Cuotas Vencidas': cuotas_vencidas,
+                        'Estado': estado_mora,
+                        'Porcentaje Pagado': (total_pagado / total_prestamo * 100) if total_prestamo > 0 else 0
+                    })
             
-            # Resumen de pagos realizados
-            if not pagos_realizados.empty:
+            if resumen_general:
+                df_resumen_final = pd.DataFrame(resumen_general)
+                
+                # Mostrar estadísticas generales
+                st.markdown("#### 📊 Estadísticas Generales")
+                col1, col2, col3, col4, col5 = st.columns(5)
+                
+                with col1:
+                    total_clientes = len(df_resumen_final)
+                    st.metric("Total Clientes", total_clientes)
+                
+                with col2:
+                    clientes_al_dia = len(df_resumen_final[df_resumen_final['Estado'] == 'Al Día'])
+                    st.metric("Clientes Al Día", clientes_al_dia)
+                
+                with col3:
+                    clientes_mora = len(df_resumen_final[df_resumen_final['Estado'] == 'En Mora'])
+                    st.metric("Clientes En Mora", clientes_mora)
+                
+                with col4:
+                    total_prestado = df_resumen_final['Monto Prestado'].sum()
+                    st.metric("Total Prestado", f"${total_prestado:,.2f}")
+                
+                with col5:
+                    total_recaudado = df_resumen_final['Total Pagado'].sum()
+                    st.metric("Total Recaudado", f"${total_recaudado:,.2f}")
+                
                 st.divider()
-                st.markdown("### 💵 Historial de Pagos Realizados")
-                df_pagos_display = pagos_realizados.copy()
-                df_pagos_display['monto'] = df_pagos_display['monto'].apply(lambda x: f"${x:,.2f}")
-                st.dataframe(
-                    df_pagos_display,
-                    use_container_width=True,
-                    column_config={
-                        "id": "ID Pago",
-                        "prestamo_id": "ID Préstamo",
-                        "fecha_pago": "Fecha Pago",
-                        "monto": "Monto"
-                    }
+                
+                # Tabla de resumen con colores
+                st.markdown("#### 📋 Detalle por Cliente")
+                
+                def color_estado_mora(val):
+                    if val == 'En Mora':
+                        return 'background-color: #ffcccc'
+                    elif val == 'Al Día':
+                        return 'background-color: #ccffcc'
+                    return ''
+                
+                # Formatear números para mostrar
+                df_display = df_resumen_final.copy()
+                df_display['Monto Prestado'] = df_display['Monto Prestado'].apply(lambda x: f"${x:,.2f}")
+                df_display['Total Pagado'] = df_display['Total Pagado'].apply(lambda x: f"${x:,.2f}")
+                df_display['Saldo Pendiente'] = df_display['Saldo Pendiente'].apply(lambda x: f"${x:,.2f}")
+                df_display['Porcentaje Pagado'] = df_display['Porcentaje Pagado'].apply(lambda x: f"{x:.1f}%")
+                
+                # Aplicar estilos
+                styled_df = df_display.style.applymap(color_estado_mora, subset=['Estado'])
+                st.dataframe(styled_df, use_container_width=True)
+                
+                # Filtros por estado
+                st.divider()
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("#### 🚨 Clientes En Mora")
+                    clientes_mora_df = df_display[df_display['Estado'] == 'En Mora']
+                    if not clientes_mora_df.empty:
+                        st.dataframe(
+                            clientes_mora_df[['Cliente', 'Teléfono', 'Cuotas Vencidas', 'Saldo Pendiente']],
+                            use_container_width=True
+                        )
+                    else:
+                        st.success("¡Excelente! No hay clientes en mora.")
+                
+                with col2:
+                    st.markdown("#### ✅ Clientes Al Día")
+                    clientes_al_dia_df = df_display[df_display['Estado'] == 'Al Día']
+                    if not clientes_al_dia_df.empty:
+                        st.dataframe(
+                            clientes_al_dia_df[['Cliente', 'Porcentaje Pagado', 'Saldo Pendiente']],
+                            use_container_width=True
+                        )
+                    else:
+                        st.info("No hay clientes al día actualmente.")
+    
+    with tab2:
+        st.markdown("### 📅 Cronograma Individual de Préstamo")
+        
+        df_prestamos = obtener_prestamos()
+        
+        if df_prestamos.empty:
+            st.info("📌 No hay préstamos para generar cronogramas individuales.")
+        else:
+            # Selector de préstamo
+            prestamo_options = [f"#{row['id']} - {row['cliente']} (${row['monto']:,.2f})" 
+                              for _, row in df_prestamos.iterrows()]
+            prestamo_sel = st.selectbox("Selecciona un préstamo para ver su cronograma", prestamo_options)
+            prestamo_id = int(prestamo_sel.split('#')[1].split(' - ')[0])
+            
+            # Obtener detalles del préstamo
+            df_prestamo_detalle = obtener_prestamo_detalle(prestamo_id)
+            if not df_prestamo_detalle.empty:
+                prestamo = df_prestamo_detalle.iloc[0]
+                
+                # Mostrar información del préstamo
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Cliente", prestamo['cliente_nombre'])
+                with col2:
+                    st.metric("Monto", f"${prestamo['monto']:,.2f}")
+                with col3:
+                    st.metric("Tasa Anual", f"{prestamo['tasa']}%")
+                with col4:
+                    st.metric("Plazo", f"{prestamo['plazo']} meses")
+                
+                st.divider()
+                
+                # Calcular cronograma
+                cronograma = calcular_cronograma(
+                    prestamo['monto'], 
+                    prestamo['tasa'], 
+                    prestamo['plazo'], 
+                    prestamo['frecuencia'],
+                    prestamo['fecha_desembolso']
                 )
+                
+                # Obtener pagos realizados
+                pagos_realizados = obtener_pagos(prestamo_id)
+                
+                # Calcular estado de cuotas
+                cronograma_con_estado = estado_cuotas(cronograma, pagos_realizados)
+                
+                # Mostrar estadísticas
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    cuotas_pagadas = len(cronograma_con_estado[cronograma_con_estado['Pendiente'] == 0])
+                    st.metric("Cuotas Pagadas", cuotas_pagadas)
+                with col2:
+                    cuotas_vencidas = len(cronograma_con_estado[cronograma_con_estado['Estado'] == 'Vencida'])
+                    st.metric("Cuotas Vencidas", cuotas_vencidas)
+                with col3:
+                    total_pagado = pagos_realizados['monto'].sum() if not pagos_realizados.empty else 0
+                    st.metric("Total Pagado", f"${total_pagado:,.2f}")
+                with col4:
+                    saldo_pendiente = cronograma_con_estado['Pendiente'].sum()
+                    st.metric("Saldo Pendiente", f"${saldo_pendiente:,.2f}")
+                
+                st.divider()
+                
+                # Mostrar cronograma con estado
+                st.markdown("### 📅 Cronograma de Pagos")
+                
+                # Aplicar colores según el estado
+                def color_estado(val):
+                    if val == 'Vencida':
+                        return 'background-color: #ffcccc'
+                    elif val == 'Al día':
+                        return 'background-color: #ccffcc'
+                    return ''
+                
+                df_display_cronograma = cronograma_con_estado.copy()
+                df_display_cronograma['Cuota'] = df_display_cronograma['Cuota'].apply(lambda x: f"${x:,.2f}")
+                df_display_cronograma['Interes'] = df_display_cronograma['Interes'].apply(lambda x: f"${x:,.2f}")
+                df_display_cronograma['Amortizacion'] = df_display_cronograma['Amortizacion'].apply(lambda x: f"${x:,.2f}")
+                df_display_cronograma['Saldo'] = df_display_cronograma['Saldo'].apply(lambda x: f"${x:,.2f}")
+                df_display_cronograma['Pagado'] = df_display_cronograma['Pagado'].apply(lambda x: f"${x:,.2f}")
+                df_display_cronograma['Pendiente'] = df_display_cronograma['Pendiente'].apply(lambda x: f"${x:,.2f}")
+                
+                # Mostrar tabla con estilos
+                styled_df = df_display_cronograma.style.applymap(color_estado, subset=['Estado'])
+                st.dataframe(styled_df, use_container_width=True)
+                
+                # Botón para exportar PDF
+                st.divider()
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col2:
+                    if st.button("📄 Exportar Cronograma a PDF", use_container_width=True):
+                        pdf_buffer = exportar_pdf(cronograma_con_estado, prestamo['cliente_nombre'], prestamo_id)
+                        st.download_button(
+                            label="⬇️ Descargar PDF",
+                            data=pdf_buffer.getvalue(),
+                            file_name=f"cronograma_prestamo_{prestamo_id}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                
+                # Resumen de pagos realizados
+                if not pagos_realizados.empty:
+                    st.divider()
+                    st.markdown("### 💵 Historial de Pagos Realizados")
+                    df_pagos_display = pagos_realizados.copy()
+                    df_pagos_display['monto'] = df_pagos_display['monto'].apply(lambda x: f"${x:,.2f}")
+                    st.dataframe(
+                        df_pagos_display,
+                        use_container_width=True,
+                        column_config={
+                            "id": "ID Pago",
+                            "prestamo_id": "ID Préstamo",
+                            "fecha_pago": "Fecha Pago",
+                            "monto": "Monto"
+                        }
+                    )
 
 # Footer
 st.divider()
