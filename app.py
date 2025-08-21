@@ -19,6 +19,8 @@ def get_conn():
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
+    
+    # Crear tabla clientes
     cur.execute("""
     CREATE TABLE IF NOT EXISTS clientes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,6 +29,8 @@ def init_db():
         direccion TEXT,
         telefono TEXT
     )""")
+    
+    # Crear tabla prestamos
     cur.execute("""
     CREATE TABLE IF NOT EXISTS prestamos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,22 +40,51 @@ def init_db():
         plazo INTEGER,
         frecuencia INTEGER,
         fecha_desembolso DATE,
-        aval_nombre TEXT,
-        aval_identificacion TEXT,
-        aval_telefono TEXT,
         FOREIGN KEY(cliente_id) REFERENCES clientes(id)
     )""")
+    
+    # Agregar columnas de aval a prestamos si no existen
+    try:
+        cur.execute("ALTER TABLE prestamos ADD COLUMN aval_nombre TEXT")
+    except sqlite3.OperationalError:
+        pass  # La columna ya existe
+    
+    try:
+        cur.execute("ALTER TABLE prestamos ADD COLUMN aval_identificacion TEXT")
+    except sqlite3.OperationalError:
+        pass  # La columna ya existe
+        
+    try:
+        cur.execute("ALTER TABLE prestamos ADD COLUMN aval_telefono TEXT")
+    except sqlite3.OperationalError:
+        pass  # La columna ya existe
+    
+    # Crear tabla pagos
     cur.execute("""
     CREATE TABLE IF NOT EXISTS pagos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         prestamo_id INTEGER,
         fecha_pago DATE,
         monto REAL,
-        tipo_abono TEXT DEFAULT 'ambos',
-        monto_capital REAL DEFAULT 0,
-        monto_interes REAL DEFAULT 0,
         FOREIGN KEY(prestamo_id) REFERENCES prestamos(id)
     )""")
+    
+    # Agregar columnas de tipo de abono a pagos si no existen
+    try:
+        cur.execute("ALTER TABLE pagos ADD COLUMN tipo_abono TEXT DEFAULT 'ambos'")
+    except sqlite3.OperationalError:
+        pass  # La columna ya existe
+        
+    try:
+        cur.execute("ALTER TABLE pagos ADD COLUMN monto_capital REAL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # La columna ya existe
+        
+    try:
+        cur.execute("ALTER TABLE pagos ADD COLUMN monto_interes REAL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # La columna ya existe
+    
     conn.commit()
     conn.close()
 
@@ -94,19 +127,48 @@ def obtener_clientes():
 def agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso, aval_nombre="", aval_identificacion="", aval_telefono=""):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("INSERT INTO prestamos (cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso, aval_nombre, aval_identificacion, aval_telefono) VALUES (?,?,?,?,?,?,?,?,?)",
-                (cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso, aval_nombre, aval_identificacion, aval_telefono))
+    
+    # Verificar qué columnas existen en la tabla prestamos
+    cur.execute("PRAGMA table_info(prestamos)")
+    columns_info = cur.fetchall()
+    column_names = [col[1] for col in columns_info]
+    
+    if 'aval_nombre' in column_names:
+        # Usar la versión completa con aval
+        cur.execute("INSERT INTO prestamos (cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso, aval_nombre, aval_identificacion, aval_telefono) VALUES (?,?,?,?,?,?,?,?,?)",
+                    (cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso, aval_nombre, aval_identificacion, aval_telefono))
+    else:
+        # Usar la versión básica sin aval
+        cur.execute("INSERT INTO prestamos (cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso) VALUES (?,?,?,?,?,?)",
+                    (cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso))
+    
     conn.commit()
     conn.close()
 
 def obtener_prestamos():
     conn = get_conn()
-    df = pd.read_sql_query("""
-    SELECT p.id, c.nombre as cliente, p.monto, p.tasa, p.plazo, p.frecuencia, p.fecha_desembolso, 
-           p.aval_nombre, p.aval_identificacion, p.aval_telefono
+    
+    # Verificar qué columnas existen en la tabla prestamos
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(prestamos)")
+    columns_info = cur.fetchall()
+    column_names = [col[1] for col in columns_info]
+    
+    # Construir la consulta según las columnas disponibles
+    base_select = "p.id, c.nombre as cliente, p.monto, p.tasa, p.plazo, p.frecuencia, p.fecha_desembolso"
+    
+    if 'aval_nombre' in column_names:
+        aval_select = ", p.aval_nombre, p.aval_identificacion, p.aval_telefono"
+    else:
+        aval_select = ", NULL as aval_nombre, NULL as aval_identificacion, NULL as aval_telefono"
+    
+    query = f"""
+    SELECT {base_select}{aval_select}
     FROM prestamos p JOIN clientes c ON p.cliente_id = c.id
     ORDER BY p.id DESC
-    """, conn)
+    """
+    
+    df = pd.read_sql_query(query, conn)
     conn.close()
     return df
 
@@ -123,8 +185,21 @@ def obtener_prestamo_detalle(prestamo_id):
 def agregar_pago(prestamo_id, fecha_pago, monto, tipo_abono="ambos", monto_capital=0, monto_interes=0):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("INSERT INTO pagos (prestamo_id, fecha_pago, monto, tipo_abono, monto_capital, monto_interes) VALUES (?,?,?,?,?,?)",
-                (prestamo_id, fecha_pago, monto, tipo_abono, monto_capital, monto_interes))
+    
+    # Verificar qué columnas existen en la tabla pagos
+    cur.execute("PRAGMA table_info(pagos)")
+    columns_info = cur.fetchall()
+    column_names = [col[1] for col in columns_info]
+    
+    if 'tipo_abono' in column_names:
+        # Usar la versión completa con tipo_abono
+        cur.execute("INSERT INTO pagos (prestamo_id, fecha_pago, monto, tipo_abono, monto_capital, monto_interes) VALUES (?,?,?,?,?,?)",
+                    (prestamo_id, fecha_pago, monto, tipo_abono, monto_capital, monto_interes))
+    else:
+        # Usar la versión básica sin tipo_abono
+        cur.execute("INSERT INTO pagos (prestamo_id, fecha_pago, monto) VALUES (?,?,?)",
+                    (prestamo_id, fecha_pago, monto))
+    
     conn.commit()
     conn.close()
 
