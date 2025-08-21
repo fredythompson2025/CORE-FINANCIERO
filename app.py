@@ -36,6 +36,9 @@ def init_db():
         plazo INTEGER,
         frecuencia INTEGER,
         fecha_desembolso DATE,
+        aval_nombre TEXT,
+        aval_identificacion TEXT,
+        aval_telefono TEXT,
         FOREIGN KEY(cliente_id) REFERENCES clientes(id)
     )""")
     cur.execute("""
@@ -44,6 +47,9 @@ def init_db():
         prestamo_id INTEGER,
         fecha_pago DATE,
         monto REAL,
+        tipo_abono TEXT DEFAULT 'ambos',
+        monto_capital REAL DEFAULT 0,
+        monto_interes REAL DEFAULT 0,
         FOREIGN KEY(prestamo_id) REFERENCES prestamos(id)
     )""")
     conn.commit()
@@ -85,18 +91,19 @@ def obtener_clientes():
     conn.close()
     return df
 
-def agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso):
+def agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso, aval_nombre="", aval_identificacion="", aval_telefono=""):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("INSERT INTO prestamos (cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso) VALUES (?,?,?,?,?,?)",
-                (cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso))
+    cur.execute("INSERT INTO prestamos (cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso, aval_nombre, aval_identificacion, aval_telefono) VALUES (?,?,?,?,?,?,?,?,?)",
+                (cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso, aval_nombre, aval_identificacion, aval_telefono))
     conn.commit()
     conn.close()
 
 def obtener_prestamos():
     conn = get_conn()
     df = pd.read_sql_query("""
-    SELECT p.id, c.nombre as cliente, p.monto, p.tasa, p.plazo, p.frecuencia, p.fecha_desembolso
+    SELECT p.id, c.nombre as cliente, p.monto, p.tasa, p.plazo, p.frecuencia, p.fecha_desembolso, 
+           p.aval_nombre, p.aval_identificacion, p.aval_telefono
     FROM prestamos p JOIN clientes c ON p.cliente_id = c.id
     ORDER BY p.id DESC
     """, conn)
@@ -113,11 +120,11 @@ def obtener_prestamo_detalle(prestamo_id):
     conn.close()
     return df
 
-def agregar_pago(prestamo_id, fecha_pago, monto):
+def agregar_pago(prestamo_id, fecha_pago, monto, tipo_abono="ambos", monto_capital=0, monto_interes=0):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("INSERT INTO pagos (prestamo_id, fecha_pago, monto) VALUES (?,?,?)",
-                (prestamo_id, fecha_pago, monto))
+    cur.execute("INSERT INTO pagos (prestamo_id, fecha_pago, monto, tipo_abono, monto_capital, monto_interes) VALUES (?,?,?,?,?,?)",
+                (prestamo_id, fecha_pago, monto, tipo_abono, monto_capital, monto_interes))
     conn.commit()
     conn.close()
 
@@ -416,23 +423,58 @@ elif menu == "Préstamos":
         with col1:
             with st.form("form_prestamo"):
                 st.markdown("### 🏦 Crear Préstamo")
-                cliente_sel = st.selectbox("Cliente", df_clientes['nombre'])
-                monto = st.number_input("Monto", min_value=0.0, value=1000.0, step=100.0, format="%.2f")
-                tasa = st.number_input("Tasa anual (%)", min_value=0.0, value=12.0, step=0.1, format="%.2f")
-                plazo = st.number_input("Plazo (meses)", min_value=1, value=12)
-                frecuencia = st.selectbox("Frecuencia de pagos por año", [12, 4, 2, 1], index=0, 
-                                        format_func=lambda x: f"{x} pagos/año ({'Mensual' if x==12 else 'Trimestral' if x==4 else 'Semestral' if x==2 else 'Anual'})")
-                fecha_desembolso = st.date_input("Fecha de desembolso", value=date.today())
-                submitted = st.form_submit_button("🏦 Crear préstamo")
+                
+                # Información básica del préstamo
+                col1, col2 = st.columns(2)
+                with col1:
+                    cliente_sel = st.selectbox("Cliente", df_clientes['nombre'])
+                    monto = st.number_input("Monto", min_value=0.0, value=1000.0, step=100.0, format="%.2f")
+                    tasa = st.number_input("Tasa anual (%)", min_value=0.0, value=12.0, step=0.1, format="%.2f")
+                
+                with col2:
+                    plazo = st.number_input("Plazo (meses)", min_value=1, value=12)
+                    frecuencia = st.selectbox("Frecuencia de pagos por año", [12, 4, 2, 1], index=0, 
+                                            format_func=lambda x: f"{x} pagos/año ({'Mensual' if x==12 else 'Trimestral' if x==4 else 'Semestral' if x==2 else 'Anual'})")
+                    fecha_desembolso = st.date_input("Fecha de desembolso", value=date.today())
+                
+                # Sección de aval
+                st.divider()
+                st.markdown("#### 👥 Información del Aval (Opcional)")
+                tiene_aval = st.checkbox("¿Este préstamo requiere aval?")
+                
+                aval_nombre = ""
+                aval_identificacion = ""
+                aval_telefono = ""
+                
+                if tiene_aval:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        aval_nombre = st.text_input("Nombre completo del aval", placeholder="Ej: María García")
+                        aval_identificacion = st.text_input("Identificación del aval", placeholder="Ej: 87654321")
+                    with col2:
+                        aval_telefono = st.text_input("Teléfono del aval", placeholder="Ej: +57 300 987 6543")
+                        st.info("💡 El aval es quien garantiza el pago del préstamo en caso de incumplimiento.")
+                
+                submitted = st.form_submit_button("🏦 Crear préstamo", use_container_width=True)
                 
                 if submitted:
                     if monto <= 0:
                         st.error("El monto debe ser mayor a 0")
+                    elif tiene_aval and not aval_nombre.strip():
+                        st.error("Si requiere aval, debe ingresar el nombre del aval")
                     else:
                         cliente_row = df_clientes[df_clientes['nombre'] == cliente_sel]
                         cliente_id = int(cliente_row['id'].iloc[0])
-                        agregar_prestamo(cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso)
-                        st.success(f"Préstamo creado para {cliente_sel}.")
+                        
+                        agregar_prestamo(
+                            cliente_id, monto, tasa, plazo, frecuencia, fecha_desembolso,
+                            aval_nombre.strip() if tiene_aval else "",
+                            aval_identificacion.strip() if tiene_aval else "",
+                            aval_telefono.strip() if tiene_aval else ""
+                        )
+                        
+                        aval_info = f" con aval: {aval_nombre}" if tiene_aval else " sin aval"
+                        st.success(f"Préstamo creado para {cliente_sel}{aval_info}.")
                         st.rerun()
 
         with col2:
@@ -449,9 +491,12 @@ elif menu == "Préstamos":
                 df_display['frecuencia'] = df_display['frecuencia'].apply(
                     lambda x: 'Mensual' if x==12 else 'Trimestral' if x==4 else 'Semestral' if x==2 else 'Anual'
                 )
+                df_display['tiene_aval'] = df_display['aval_nombre'].apply(
+                    lambda x: "✅ Sí" if x and str(x).strip() else "❌ No"
+                )
                 
                 st.dataframe(
-                    df_display,
+                    df_display[['id', 'cliente', 'monto', 'tasa', 'plazo', 'frecuencia', 'fecha_desembolso', 'tiene_aval']],
                     use_container_width=True,
                     column_config={
                         "id": "ID",
@@ -460,9 +505,29 @@ elif menu == "Préstamos":
                         "tasa": "Tasa",
                         "plazo": "Plazo (meses)",
                         "frecuencia": "Frecuencia",
-                        "fecha_desembolso": "Fecha Desembolso"
+                        "fecha_desembolso": "Fecha Desembolso",
+                        "tiene_aval": "Aval"
                     }
                 )
+                
+                # Mostrar información detallada del aval si existe
+                st.markdown("#### 👥 Información de Avales")
+                prestamos_con_aval = df_prestamos[df_prestamos['aval_nombre'].notna() & (df_prestamos['aval_nombre'] != "")]
+                if not prestamos_con_aval.empty:
+                    df_avales = prestamos_con_aval[['id', 'cliente', 'aval_nombre', 'aval_identificacion', 'aval_telefono']].copy()
+                    st.dataframe(
+                        df_avales,
+                        use_container_width=True,
+                        column_config={
+                            "id": "Préstamo ID",
+                            "cliente": "Cliente",
+                            "aval_nombre": "Nombre del Aval",
+                            "aval_identificacion": "Identificación",
+                            "aval_telefono": "Teléfono"
+                        }
+                    )
+                else:
+                    st.info("No hay préstamos con aval registrados.")
 
 elif menu == "Pagos":
     st.markdown("## 💵 Pagos")
@@ -476,21 +541,89 @@ elif menu == "Pagos":
         with col1:
             with st.form("form_pago"):
                 st.markdown("### 💵 Registrar Pago")
+                
+                # Selección de préstamo
                 prestamo_options = [f"#{row['id']} - {row['cliente']} (${row['monto']:,.2f})" 
                                   for _, row in df_prestamos.iterrows()]
                 prestamo_sel = st.selectbox("Préstamo", prestamo_options)
                 prestamo_id = int(prestamo_sel.split('#')[1].split(' - ')[0])
                 
-                fecha_pago = st.date_input("Fecha de pago", value=date.today())
-                monto_pago = st.number_input("Monto del pago", min_value=0.0, value=100.0, step=10.0, format="%.2f")
-                submitted = st.form_submit_button("💵 Registrar pago")
+                # Información básica del pago
+                col1, col2 = st.columns(2)
+                with col1:
+                    fecha_pago = st.date_input("Fecha de pago", value=date.today())
+                    monto_pago = st.number_input("Monto total del pago", min_value=0.0, value=100.0, step=10.0, format="%.2f")
+                
+                with col2:
+                    tipo_abono = st.selectbox("Tipo de abono", 
+                                            ["ambos", "capital", "interes"],
+                                            format_func=lambda x: {
+                                                "ambos": "💰 Capital e Interés (Normal)",
+                                                "capital": "🏠 Solo Capital",
+                                                "interes": "📈 Solo Interés"
+                                            }[x])
+                
+                # Desglose manual si el usuario lo desea
+                st.divider()
+                st.markdown("#### 📊 Desglose del Pago")
+                
+                if tipo_abono == "ambos":
+                    st.info("💡 Se aplicará automáticamente: primero a interés, luego a capital")
+                    desglose_manual = st.checkbox("¿Deseas especificar el desglose manualmente?")
+                    
+                    monto_capital = 0
+                    monto_interes = 0
+                    
+                    if desglose_manual:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            monto_interes = st.number_input("Monto para interés", min_value=0.0, value=0.0, step=10.0, format="%.2f")
+                        with col2:
+                            monto_capital = st.number_input("Monto para capital", min_value=0.0, value=0.0, step=10.0, format="%.2f")
+                        
+                        if monto_interes + monto_capital != monto_pago and (monto_interes > 0 or monto_capital > 0):
+                            diferencia = monto_pago - (monto_interes + monto_capital)
+                            if diferencia > 0:
+                                st.warning(f"⚠️ Faltan ${diferencia:,.2f} por asignar")
+                            else:
+                                st.warning(f"⚠️ Hay ${abs(diferencia):,.2f} de exceso en el desglose")
+                
+                elif tipo_abono == "capital":
+                    st.info("💡 Todo el pago se aplicará únicamente al capital del préstamo")
+                    monto_capital = monto_pago
+                    monto_interes = 0
+                
+                else:  # tipo_abono == "interes"
+                    st.info("💡 Todo el pago se aplicará únicamente a los intereses del préstamo")
+                    monto_capital = 0
+                    monto_interes = monto_pago
+                
+                submitted = st.form_submit_button("💵 Registrar pago", use_container_width=True)
                 
                 if submitted:
                     if monto_pago <= 0:
                         st.error("El monto del pago debe ser mayor a 0")
+                    elif tipo_abono == "ambos" and desglose_manual and (monto_interes + monto_capital != monto_pago):
+                        st.error("El desglose manual debe sumar exactamente el monto total del pago")
                     else:
-                        agregar_pago(prestamo_id, fecha_pago, monto_pago)
-                        st.success(f"Pago de ${monto_pago:,.2f} registrado para el préstamo #{prestamo_id}.")
+                        # Si es "ambos" sin desglose manual, usar el monto total
+                        if tipo_abono == "ambos" and not desglose_manual:
+                            monto_capital = 0
+                            monto_interes = 0
+                        
+                        agregar_pago(prestamo_id, fecha_pago, monto_pago, tipo_abono, monto_capital, monto_interes)
+                        
+                        # Mensaje de confirmación detallado
+                        if tipo_abono == "ambos":
+                            if desglose_manual:
+                                st.success(f"Pago registrado: ${monto_pago:,.2f} (Interés: ${monto_interes:,.2f}, Capital: ${monto_capital:,.2f})")
+                            else:
+                                st.success(f"Pago registrado: ${monto_pago:,.2f} (Se aplicará automáticamente)")
+                        elif tipo_abono == "capital":
+                            st.success(f"Pago a capital registrado: ${monto_pago:,.2f}")
+                        else:
+                            st.success(f"Pago a interés registrado: ${monto_pago:,.2f}")
+                        
                         st.rerun()
 
         with col2:
@@ -503,15 +636,37 @@ elif menu == "Pagos":
                 df_display_pagos = df_todos_pagos.copy()
                 df_display_pagos['monto'] = df_display_pagos['monto'].apply(lambda x: f"${x:,.2f}")
                 
-                st.dataframe(
-                    df_display_pagos[['prestamo_id', 'cliente', 'fecha_pago', 'monto']],
-                    use_container_width=True,
-                    column_config={
+                # Agregar información del tipo de abono si existe
+                if 'tipo_abono' in df_display_pagos.columns:
+                    df_display_pagos['tipo_abono_formatted'] = df_display_pagos['tipo_abono'].apply(
+                        lambda x: {
+                            'ambos': '💰 Capital + Interés',
+                            'capital': '🏠 Solo Capital', 
+                            'interes': '📈 Solo Interés'
+                        }.get(str(x), '💰 Capital + Interés')
+                    )
+                    
+                    columnas_mostrar = ['prestamo_id', 'cliente', 'fecha_pago', 'monto', 'tipo_abono_formatted']
+                    column_config = {
+                        "prestamo_id": "Préstamo ID",
+                        "cliente": "Cliente", 
+                        "fecha_pago": "Fecha Pago",
+                        "monto": "Monto",
+                        "tipo_abono_formatted": "Tipo de Abono"
+                    }
+                else:
+                    columnas_mostrar = ['prestamo_id', 'cliente', 'fecha_pago', 'monto']
+                    column_config = {
                         "prestamo_id": "Préstamo ID",
                         "cliente": "Cliente",
                         "fecha_pago": "Fecha Pago",
                         "monto": "Monto"
                     }
+                
+                st.dataframe(
+                    df_display_pagos[columnas_mostrar],
+                    use_container_width=True,
+                    column_config=column_config
                 )
 
 elif menu == "Reporte":
